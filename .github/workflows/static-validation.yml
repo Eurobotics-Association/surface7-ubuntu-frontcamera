@@ -1,0 +1,13 @@
+name: Static validation
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  static-validation:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate deployment scripts
+        run: ./tests/static-validation.sh

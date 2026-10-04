@@ -1,0 +1,13 @@
+/build/
+/dist/
+/tmp/
+*.o
+*.ko
+*.mod
+*.mod.c
+*.cmd
+Module.symvers
+modules.order
+__pycache__/
+.pytest_cache/
+.venv/

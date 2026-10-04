@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-2.0-or-later
+set -euo pipefail
+
+ENV_FILE=/etc/default/surface7-front-camera
+if [[ ! -r "$ENV_FILE" ]]; then
+    echo "Camera configuration is missing: $ENV_FILE" >&2
+    exit 1
+fi
+source "$ENV_FILE"
+
+for value in CAMERA_NAME DEVICE SOURCE_WIDTH SOURCE_HEIGHT SOURCE_FPS_NUM SOURCE_FPS_DEN OUTPUT_WIDTH OUTPUT_HEIGHT OUTPUT_FPS_NUM OUTPUT_FPS_DEN; do
+    if [[ -z "${!value:-}" ]]; then
+        echo "Camera configuration variable is missing: $value" >&2
+        exit 1
+    fi
+done
+
+exec gst-launch-1.0 -e \
+    libcamerasrc camera-name="$CAMERA_NAME" ae-enable=true \
+    ! "video/x-raw,width=$SOURCE_WIDTH,height=$SOURCE_HEIGHT,framerate=$SOURCE_FPS_NUM/$SOURCE_FPS_DEN" \
+    ! queue max-size-buffers=4 max-size-bytes=0 max-size-time=0 leaky=downstream \
+    ! videoconvert \
+    ! videoscale \
+    ! "video/x-raw,format=YUY2,width=$OUTPUT_WIDTH,height=$OUTPUT_HEIGHT,framerate=$OUTPUT_FPS_NUM/$OUTPUT_FPS_DEN" \
+    ! v4l2sink device="$DEVICE" sync=false
