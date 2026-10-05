@@ -57,6 +57,26 @@ def main() -> int:
         )
     source = source_bytes.decode("utf-8")
 
+    # This pinned IPU4P source has a Surface-Pro-7/firmware-version-specific
+    # compatibility exception in ipu-cpd.c. Its intel_ipu4p module therefore
+    # does not expose the newer fw_version_check parameter copied into this
+    # config. Remove that stale option only from the temporary adapted copy;
+    # retain the vendored source snapshot unchanged.
+    modprobe_config = path.parent / "config/modprobe.d/ipu4p.conf"
+    modprobe_text = modprobe_config.read_text(encoding="utf-8")
+    modprobe_text = replace_once(
+        modprobe_text,
+        "# The blob at /usr/lib/firmware/ipu4p_cpd.bin has fw_pkg_date 0x20191030 in its" + NL
+        + "# moduledata header, while the driver's built-in library version is 20181222." + NL
+        + "# The resulting \"Moduledata and library version mismatch (20191030 != 20181222)\"" + NL
+        + "# is structural to this firmware, not a bad download, so the check must be off." + NL
+        + "options intel_ipu4p fw_version_check=0" + NL,
+        "# The pinned IPU4P source contains a Surface Pro 7-specific compatibility check" + NL
+        + "# for the signed 20191030 firmware and 20181222 CSS library pairing." + NL,
+        "replace stale global firmware-version override with the pinned source's SP7-specific check",
+    )
+    modprobe_config.write_text(modprobe_text, encoding="utf-8")
+
     source = replace_once(source, 'EXPECTED_KERNEL="6.19.8-3.surface.fc43.x86_64"',
                           f'EXPECTED_KERNEL="{KERNEL}"', "target kernel")
     source = replace_once(source, 'EXPECTED_FEDORA="43"', 'EXPECTED_UBUNTU="24.04"',
