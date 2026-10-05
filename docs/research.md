@@ -2,6 +2,8 @@
 
 Research reviewed before deployment planning, 4 October 2026.
 
+Updated 5 October 2026 after the host target was corrected: the target is the latest Ubuntu HWE kernel installed on the Surface, with matching headers. The legacy `6.19.8-surface-3` target is not the user's requested target and is slated for removal. This public repository omits exact host-kernel inventory.
+
 ## Hardware and capture path
 
 The [Linux Surface discussion #1353](https://github.com/linux-surface/linux-surface/discussions/1353) reports the Surface Pro 7 IPU4P stack working with the front OV5693 sensor and rear camera. It is useful evidence about the Surface 7 hardware and kernel drivers; its reported desktop camera bridge is not used here.
@@ -22,6 +24,18 @@ The complete Eurobotics-Association/surface5-frontcamera repository was read bef
 
 ## Ubuntu adaptation
 
-The Surface 7 source release's installer targets a different Linux distribution, package manager, and kernel release. This repository changes those edges in a temporary source copy: package installation uses Ubuntu APT, the target is Ubuntu 24.04 with kernel 6.19.8-surface-3, and built libraries are installed in a project-specific directory. The vendor snapshot remains unchanged.
+The Surface 7 source release's installer targets a different Linux distribution, package manager, and kernel release. Existing local adaptations use Ubuntu APT and a project-specific library directory, but they are pinned to the now-obsolete `6.19.8-surface-3`. The next implementation must instead build against the selected Ubuntu kernel and matching headers. The vendor snapshot remains unchanged.
 
-The supported project target is Surface Pro 7 on Ubuntu 24.04 with the matching pinned linux-surface kernel. Build, deployment, and camera tests are tracked separately in testing.md.
+## Current-kernel compatibility
+
+The target is Ubuntu 24.04 x86_64 with the latest installed Ubuntu HWE kernel. The [Linux Surface IPU4 discussion](https://github.com/linux-surface/linux-surface/discussions/1353) contains recent Surface Pro 7 reports of the IPU4P stack and OV5693 front camera working, including a driver patch series validated on Linux 6.19.8. Those reports make the driver path promising, but do not establish that the same source compiles or works against the host's current Ubuntu HWE kernel. That is the next compatibility check; no camera support claim is made yet.
+
+## DKMS assessment
+
+DKMS is a plausible way to keep the out-of-tree IPU4P and loopback kernel modules rebuilt when Ubuntu installs a new kernel. Its module source must remain under `/usr/src` with a valid `dkms.conf`; `AUTOINSTALL="yes"` enables automatic attempts, and `dkms autoinstall` installs modules built for other kernel revisions. A matching kernel headers package is still needed, and DKMS recompiles modules for each kernel version. It does not make an incompatible driver patch compatible with a new kernel or guarantee the build succeeds. See the [Ubuntu 24.04 DKMS manual](https://manpages.ubuntu.com/manpages/noble/man8/dkms.8.html) and [upstream DKMS manual](https://github.com/dkms-project/dkms/blob/main/dkms.8.in).
+
+The plan is to prove the module sources against the host's current Ubuntu kernel first, then package those sources for DKMS only after a normal build and live camera test pass. The separately built libcamera/GStreamer userspace components are not DKMS modules; kernel upgrades do not normally require rebuilding them, though the camera path must be rechecked after kernel-driver changes.
+
+## Surface Pro 7 ventilation context
+
+The linux-surface project has a long-running [Surface Pro 7 thermal-throttling issue](https://github.com/linux-surface/linux-surface/issues/221) and a [thermald configuration discussion](https://github.com/linux-surface/linux-surface/discussions/558). These are historical reports, not a diagnosis of this unit's fan behavior. Investigate this separately using sensor/cooling-device reports, fan telemetry where available, and service/kernel logs before considering configuration changes. Keep this separate from camera driver deployment.

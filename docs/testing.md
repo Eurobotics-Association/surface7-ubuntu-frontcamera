@@ -1,68 +1,30 @@
 # Testing and acceptance
 
-## Current evidence
+## Current state
 
-The project target is Surface Pro 7 on Ubuntu 24.04 with the matching 6.19.8-surface-3 kernel. No build or live front-camera acceptance result has been recorded yet. Keep this status until a target Surface produces non-black, changing frames and passes a reboot check.
+The intended host target is Surface Pro 7 on Ubuntu 24.04 x86_64 using the latest installed Ubuntu HWE kernel. Confirm the active/latest kernel and exact matching headers again before implementation. The exact host kernel version is kept out of this public repository.
 
-## Static validation
+The scripts in this repository are still pinned to `6.19.8-surface-3`. That kernel is legacy on this host and is slated for removal. Do not use the current install or build scripts until the approved kernel/DKMS plan is implemented. No camera installation is active now.
 
-Run from the repository root:
+## Test history
 
-~~~sh
-./tests/static-validation.sh
-~~~
+- Ubuntu package preflight passed on the host. Required build and GStreamer packages were installed through Ubuntu APT; these packages remain installed after rollback.
+- Static build-only validation succeeded for the legacy `6.19.8-surface-3` target. The IPU4P modules and GStreamer-enabled libcamera plugin built and staged. This proves only that the legacy target build completed; it does not validate the desired Ubuntu kernel or live camera.
+- On the legacy target, a deployment attempt compiled the IPU4P modules and `v4l2loopback`, then installed the verified IPU4P firmware. Libcamera compilation was interrupted at 114/201 Ninja tasks after a thermal monitor warning at 87°C. The user has since clarified that work may continue below 95°C; future runs follow that limit. There was no compiler failure and no camera capture test.
+- The deployment and a later retry were rolled back. Added kernel modules and firmware were removed/restored; the camera services are inactive. The test did not establish that the camera works.
+- The machine was returned to its original Ubuntu HWE running kernel. The old `6.19.8-surface-3` kernel and header packages are being removed at the user's request.
 
-This checks the pinned vendor installer digest, shell and Python syntax, and the adapter output. It does not write to system locations or prove that the camera works.
+The Surface thermal monitor reported 87°C during compilation. The user clarified that this is below the device's permitted test limit: continue work below 95°C and pause at or above 95°C. The user also reports that the fan may not engage when needed; record thermal observations and investigate that separately.
 
-## Package and build validation
+## Planned validation after approval
 
-The installer checks its required APT package list, the GStreamer conversion and V4L2 elements, and matching kernel headers. It installs missing Ubuntu packages through APT, using sudo when needed.
+The proposed workflow is in [dkms-plan.md](dkms-plan.md). Once the plan is approved and implemented:
 
-~~~sh
-./scripts/install.sh --build-only
-~~~
+1. Run static validation and build the driver modules against the selected Ubuntu kernel headers.
+2. Confirm DKMS status and module metadata for the target kernel before deployment.
+3. Deploy with the ownership-checked rollback path, reboot only as required to load the selected kernel modules, and record the kernel version.
+4. Check kernel logs, IPU4P/front-sensor enumeration, GStreamer `libcamerasrc`, and the V4L2 loopback device.
+5. Capture moving, non-black frames from `/dev/video83`; verify with an application using V4L2 and repeat after reboot.
+6. Record DKMS rebuild results for a later installed kernel before claiming automatic kernel-upgrade support.
 
-Build-only targets /lib/modules/6.19.8-surface-3/build even when another kernel is running. It builds kernel modules, patched libcamera with its GStreamer plugin enabled, stages user-space files in a temporary directory, and verifies libcamerasrc with gst-inspect-1.0. It does not install camera modules, firmware, libraries, services, or configuration into system locations.
-
-## Live camera acceptance
-
-Boot 6.19.8-surface-3 before deployment. The install script installs the kernel modules and enables the GStreamer and IPU4P initialization services for boot. It does not reload camera modules or reboot.
-
-~~~sh
-./scripts/install.sh --install
-sudo reboot
-~~~
-
-After boot, verify the device and services:
-
-~~~sh
-./scripts/status.sh
-systemctl status sp7-camera-boot.service surface7-front-camera.service
-v4l2-ctl --list-devices
-gst-inspect-1.0 libcamerasrc
-~~~
-
-The front-camera bridge writes to /dev/video83. A V4L2 application should be able to open that device. For a simple stream check:
-
-~~~sh
-v4l2-ctl -d /dev/video83 --stream-mmap=3 --stream-count=90 --stream-to=/tmp/surface7-front-test.yuyv
-~~~
-
-Confirm that the camera shows the expected live view and that the saved frames change when the scene moves. Repeat after a second reboot. Check errors with:
-
-~~~sh
-journalctl -b -k
-journalctl -b -u sp7-camera-boot.service -u surface7-front-camera.service
-~~~
-
-Acceptance requires:
-
-1. IPU4P, front sensor, and GStreamer service start without unresolved symbols or firmware errors.
-2. libcamerasrc enumerates the Surface Pro 7 front sensor.
-3. /dev/video83 delivers non-black, changing frames.
-4. An application using V4L2 can open the loopback camera and display a live image.
-5. The behavior persists after reboot.
-
-Save exact OS and kernel versions, command output, relevant logs, and moving-frame test result in a dated report before describing Ubuntu support as validated.
-
-The GStreamer bridge is enabled as a system service and keeps the front camera active while running. Stop the service when the camera is not needed.
+Acceptance requires successful camera enumeration, moving-frame capture, application access, and persistence after reboot. A build result or detected video node alone is not camera acceptance.
