@@ -1,10 +1,22 @@
+Updated: 5 October 2026, 23:15 CEST
+
 # Surface Pro 7 front camera on Ubuntu
 
-This repository adapts the Surface Pro 7 IPU4P camera stack for Ubuntu 24.04 and a GStreamer capture service for the front RGB camera. The installed GStreamer path has produced viewable, visibly moving frames and V4L2 loopback readback. Cheese showed the user a live preview. The deployment's rollback path has been exercised. Support remains experimental because colors are poor and reboot/kernel-upgrade persistence has not been checked.
+## Quick install
+
+For a fresh install on Ubuntu 24.04 x86_64 running on Microsoft Surface Pro 7, run:
+
+~~~sh
+curl -fsSL https://raw.githubusercontent.com/Eurobotics-Association/surface7-ubuntu-frontcamera/main/scripts/install-from-github.sh | bash -s -- --install
+~~~
+
+The installer checks and installs required Ubuntu packages through APT, builds the camera modules for the running kernel, and deploys the experimental GStreamer camera stack. It asks for sudo when needed. Review the repository and rollback instructions before installing; do not use this fresh-install command to upgrade an existing deployment.
+
+This repository adapts the Surface Pro 7 IPU4P camera stack for Ubuntu 24.04 and a GStreamer capture service for the front RGB camera. The installed GStreamer path has produced viewable, visibly moving frames through `/dev/video83`, and the deployment's rollback path has been exercised. Cheese showed a live preview once, but currently reports no camera and remains unresolved. The bridge runs continuously, which keeps the front-camera LED lit while the service is active. Support remains experimental while app discovery, image quality, and reboot/kernel-upgrade persistence are checked.
 
 ## Current target and status
 
-The host is running Ubuntu's latest installed HWE generic kernel; the out-of-tree camera modules are registered with DKMS for the running kernel and another installed kernel with matching headers. The rollback-safe installer is deployed, including the pinned OV5693 simple-IPA tuning file and persistent `max_buffers=4` loopback setting. The service is running after a manual start. An independent `v4l2src` consumer read `/dev/video83`, and a three-second, 90-frame capture showed the operator moving in the scene. The user also saw their live image in Cheese. Cheese's terminal logs and a separate GStreamer device-monitor probe did not agree with that visible result; the discrepancy is recorded in the test log. The latest preview was captured in a very dark room lit only by a yellow LED, so darkness, noise, and color in that sample do not assess image quality under normal lighting. No reboot was performed; boot-time and later kernel-upgrade behavior remain unverified. The one-time `iommu=pt` diagnostic setting is not a proven fix and remains active only for the current boot. See the [DKMS and kernel plan](docs/dkms-plan.md), [test record](docs/testing.md), and [dated investigation log](docs/front-camera-investigation-2026-10-05.md).
+The host is running Ubuntu's latest installed HWE generic kernel; the out-of-tree camera modules are registered with DKMS for the running kernel and another installed kernel with matching headers. The rollback-safe installer is deployed, including the pinned OV5693 simple-IPA tuning file and persistent `max_buffers=4` loopback setting. The camera bridge is currently running continuously as a system service, so the front-camera privacy LED stays lit even when no desktop app is open. An independent `v4l2src` consumer previously captured moving frames, and one earlier Cheese preview showed live video; however, the current Cheese launch reports no camera. Current diagnostics show the default GStreamer device monitor omits `/dev/video83`, while `--include-hidden` exposes it, and a default MMAP reader fails to allocate buffers while `io-mode=rw` succeeds. A still JPEG captured through the read/write path contains visible scene pixels. Cheese discovery and default capture-mode compatibility remain unresolved. The latest images were captured in low light, so normal-light image quality remains unassessed. No reboot was performed; boot-time and later kernel-upgrade behavior remain unverified. The one-time `iommu=pt` diagnostic setting is not a proven fix and remains active only for the current boot. See the [DKMS and kernel plan](docs/dkms-plan.md), [test record](docs/testing.md), and [dated investigation log](docs/front-camera-investigation-2026-10-05.md).
 
 ## Camera path
 
@@ -32,15 +44,7 @@ bash ./scripts/deploy-services.sh
 
 This checks the ownership marker, backs up unit files and their original enabled states once, enables the 60-second boot timer, and disables direct boot activation. It leaves an already-running camera process alone; the change takes effect on the next boot. Use the normal rollback command to restore the saved service state.
 
-For a fresh install directly from the public GitHub repository, run:
-
-~~~sh
-curl -fsSL https://raw.githubusercontent.com/Eurobotics-Association/surface7-ubuntu-frontcamera/main/scripts/install-from-github.sh | bash -s -- --install
-~~~
-
-This downloads the installer from `main`, checks/installs required Ubuntu packages, builds for the running Ubuntu kernel, and deploys the experimental camera stack. It asks for sudo when needed. Review the script and repository first; do not use this command to upgrade an existing deployment without first following the rollback instructions.
-
-The deployed stack is still under validation. Do not treat a successful DKMS build, loaded modules, or `/dev/media0` alone as proof that the camera works. Moving, non-black frames from `/dev/video83` and a Cheese live preview are verified. Color quality and persistence after reboot and a later kernel update remain open acceptance items.
+The deployed stack is still under validation. Do not treat a successful DKMS build, loaded modules, or `/dev/media0` alone as proof that the camera works. Moving, non-black frames from `/dev/video83` are verified. Cheese's current discovery failure, image quality, and persistence after reboot and a later kernel update remain open acceptance items.
 
 ## Rollback
 
