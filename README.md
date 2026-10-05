@@ -4,7 +4,7 @@ This repository adapts the Surface Pro 7 IPU4P camera stack for Ubuntu 24.04 and
 
 ## Current target and status
 
-The host is running Ubuntu's latest installed HWE generic kernel; the out-of-tree camera modules are registered with DKMS and installed for the current and a second installed Ubuntu kernel. The 60-second timer loaded the IPU4 stack and created the media graph, but CSE firmware authentication still failed and libcamera did not enumerate the front camera. No frames were captured. Camera support remains experimental. See the [DKMS and kernel plan](docs/dkms-plan.md) and [test record](docs/testing.md).
+The host is running Ubuntu's latest installed HWE generic kernel; the out-of-tree camera modules are registered with DKMS and installed for the current and a second installed Ubuntu kernel. In a one-time `iommu=pt` diagnostic boot, libcamera enumerated both cameras and GStreamer negotiated front-camera Bayer buffers, but the saved auto-exposure buffers contained only saturated or zero values. No viewable or moving frame has been verified, and the IOMMU setting is not a proven fix. It remains active only for the current boot; the persistent GRUB entry was restored, so the next normal reboot clears it. Camera support remains experimental. See the [DKMS and kernel plan](docs/dkms-plan.md), [test record](docs/testing.md), and [dated investigation log](docs/front-camera-investigation-2026-10-05.md).
 
 ## Camera path
 
@@ -13,7 +13,7 @@ OV5693 front RGB sensor -> Intel IPU4P -> libcamera SimplePipeline / SoftISP
 -> GStreamer libcamerasrc -> video conversion/scaling -> v4l2loopback /dev/video83
 ~~~
 
-The design uses GStreamer and libcamera's `libcamerasrc`. It does not use a PipeWire camera source, SPA plugin, or WirePlumber camera rule. The system timer starts the bridge after the delayed IPU4 initialization; its privacy indicator should be treated as active while the bridge runs.
+The design uses GStreamer and libcamera's `libcamerasrc`. It does not use a PipeWire camera source, SPA plugin, or WirePlumber camera rule. The system timer is intended to start the bridge after delayed IPU4 initialization; it is currently disabled during diagnosis. Treat the privacy indicator as active whenever a capture is running.
 
 ## Status and diagnostics
 
