@@ -1,10 +1,10 @@
 # Surface Pro 7 front camera on Ubuntu
 
-This repository adapts the Surface Pro 7 IPU4P camera stack for Ubuntu 24.04 and a GStreamer capture service for the front RGB camera. The installed GStreamer path has produced viewable, visibly moving frames and V4L2 loopback readback. The deployment's rollback path has been exercised. Support remains experimental because Cheese found no camera, colors are poor, and reboot/kernel-upgrade persistence has not been checked.
+This repository adapts the Surface Pro 7 IPU4P camera stack for Ubuntu 24.04 and a GStreamer capture service for the front RGB camera. The installed GStreamer path has produced viewable, visibly moving frames and V4L2 loopback readback. Cheese showed the user a live preview. The deployment's rollback path has been exercised. Support remains experimental because colors are poor and reboot/kernel-upgrade persistence has not been checked.
 
 ## Current target and status
 
-The host is running Ubuntu's latest installed HWE generic kernel; the out-of-tree camera modules are registered with DKMS for the running kernel and another installed kernel with matching headers. The rollback-safe installer is deployed, including the pinned OV5693 simple-IPA tuning file and persistent `max_buffers=4` loopback setting. The service is running after a manual start. An independent `v4l2src` consumer read `/dev/video83`, and a three-second, 90-frame capture showed the operator moving in the scene. Cheese reported “No device found,” and GStreamer `Video/Source` device monitoring listed no devices, so access through normal device discovery is not established. The preview has a strong green/purple cast and low-light noise. No reboot was performed; boot-time and later kernel-upgrade behavior remain unverified. The one-time `iommu=pt` diagnostic setting is not a proven fix and remains active only for the current boot. See the [DKMS and kernel plan](docs/dkms-plan.md), [test record](docs/testing.md), and [dated investigation log](docs/front-camera-investigation-2026-10-05.md).
+The host is running Ubuntu's latest installed HWE generic kernel; the out-of-tree camera modules are registered with DKMS for the running kernel and another installed kernel with matching headers. The rollback-safe installer is deployed, including the pinned OV5693 simple-IPA tuning file and persistent `max_buffers=4` loopback setting. The service is running after a manual start. An independent `v4l2src` consumer read `/dev/video83`, and a three-second, 90-frame capture showed the operator moving in the scene. The user also saw their live image in Cheese. Cheese's terminal logs and a separate GStreamer device-monitor probe did not agree with that visible result; the discrepancy is recorded in the test log. The preview has a strong green/purple cast and low-light noise. No reboot was performed; boot-time and later kernel-upgrade behavior remain unverified. The one-time `iommu=pt` diagnostic setting is not a proven fix and remains active only for the current boot. See the [DKMS and kernel plan](docs/dkms-plan.md), [test record](docs/testing.md), and [dated investigation log](docs/front-camera-investigation-2026-10-05.md).
 
 ## Camera path
 
@@ -40,7 +40,7 @@ curl -fsSL https://raw.githubusercontent.com/Eurobotics-Association/surface7-ubu
 
 This downloads the installer from `main`, checks/installs required Ubuntu packages, builds for the running Ubuntu kernel, and deploys the experimental camera stack. It asks for sudo when needed. Review the script and repository first; do not use this command to upgrade an existing deployment without first following the rollback instructions.
 
-The deployed stack is still under validation. Do not treat a successful DKMS build, loaded modules, or `/dev/media0` alone as proof that the camera works. Moving, non-black frames from `/dev/video83` are verified. Ordinary camera-application access and persistence after reboot and a later kernel update remain open acceptance items.
+The deployed stack is still under validation. Do not treat a successful DKMS build, loaded modules, or `/dev/media0` alone as proof that the camera works. Moving, non-black frames from `/dev/video83` and a Cheese live preview are verified. Color quality and persistence after reboot and a later kernel update remain open acceptance items.
 
 ## Rollback
 
