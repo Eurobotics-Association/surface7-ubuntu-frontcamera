@@ -139,7 +139,6 @@ The LED cannot turn off while the current always-on `libcamerasrc` bridge is str
 
 No reboot is needed for either the successful browser test or the pending Cheese discovery work. A later reboot is a separate test of the already-enabled delayed boot timer, requiring the system-wide warning and full two-minute wait in `AGENTS.md`.
 
-
 ## Idle producer open-file check — 6 October 2026
 
 A read-only check through the existing `surf7cam-test` tmux pane found `surface7-front-camera.service` active and the GStreamer producer holding `/dev/video42` and `/dev/video83`. `fuser -v` listed only that producer (PID 90319) on either device. Brave browser processes were present, but none held the physical or virtual camera node; no Firefox process was running at that observation. This confirms that the always-on producer, without an application reader, is sufficient to keep the physical sensor active and the white LED on. It does not establish the cause of Firefox's failed capture. No service, camera module, browser preference, or host setting was changed, and no reboot occurred.
