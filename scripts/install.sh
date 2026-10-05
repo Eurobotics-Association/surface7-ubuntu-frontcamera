@@ -54,7 +54,7 @@ if [[ "$MODE" == install ]]; then
     library_marker="$SURFACE7_LIBDIR/.surface7-ubuntu-frontcamera-owned"
     if [[ -e "$SURFACE7_LIBDIR" ]]; then
         echo "A product library directory already exists at $SURFACE7_LIBDIR." >&2
-        echo "Run ./scripts/rollback.sh before deploying again." >&2
+        echo "Run $SURFACE7_LIBDIR/scripts/rollback.sh or ./scripts/rollback.sh before deploying again." >&2
         [[ -f "$library_marker" ]] || echo "It is not marked as owned by this project; do not remove it manually." >&2
         exit 1
     fi
@@ -89,13 +89,19 @@ if [[ "$MODE" == build ]]; then
     "$upstream/install.sh" --build-only
     exit $?
 fi
-    echo "Creating the product ownership marker for safe rollback."
-    sudo -v
-    sudo install -d -m 0755 "$SURFACE7_LIBDIR"
-    sudo install -m 0644 "$ROOT/config/ownership-marker" \
-        "$SURFACE7_LIBDIR/.surface7-ubuntu-frontcamera-owned"
-    printf '%s\n' "$SURFACE7_TARGET_KERNEL" | sudo tee \
-        "$SURFACE7_LIBDIR/deployment-kernel" >/dev/null
+echo "Creating the product ownership marker and persistent rollback helper."
+sudo -v
+sudo install -d -m 0755 "$SURFACE7_LIBDIR/config" "$SURFACE7_LIBDIR/scripts"
+sudo install -m 0644 "$ROOT/config/ubuntu.env" \
+    "$SURFACE7_LIBDIR/config/ubuntu.env"
+sudo install -m 0644 "$ROOT/config/ownership-marker" \
+    "$SURFACE7_LIBDIR/config/ownership-marker"
+sudo install -m 0755 "$ROOT/scripts/rollback.sh" \
+    "$SURFACE7_LIBDIR/scripts/rollback.sh"
+sudo install -m 0644 "$ROOT/config/ownership-marker" \
+    "$SURFACE7_LIBDIR/.surface7-ubuntu-frontcamera-owned"
+printf '%s\n' "$SURFACE7_TARGET_KERNEL" | sudo tee \
+    "$SURFACE7_LIBDIR/deployment-kernel" >/dev/null
 "$upstream/install.sh"
 printf '\nDeployment files installed. Reboot into %s before camera validation.\n' "$SURFACE7_TARGET_KERNEL"
-printf 'Rollback command: %s/scripts/rollback.sh\n' "$ROOT"
+printf 'Rollback command: %s/scripts/rollback.sh\n' "$SURFACE7_LIBDIR"

@@ -104,6 +104,12 @@ grep -Fq 'unmarked DKMS source has a registered module' "$ROOT/scripts/rollback.
 grep -Fq 'dkms_registration="/var/lib/dkms/${dkms_package}/${dkms_version}"' \
     "$ROOT/scripts/rollback.sh"
 grep -Fq 'deployment-kernel' "$ROOT/scripts/install.sh"
+grep -Fq 'sudo install -m 0755 "$ROOT/scripts/rollback.sh"' "$ROOT/scripts/install.sh"
+grep -Fq 'sudo install -m 0644 "$ROOT/config/ubuntu.env"' "$ROOT/scripts/install.sh"
+grep -Fq 'Rollback command: %s/scripts/rollback.sh' "$ROOT/scripts/install.sh"
+grep -Fq 'persistent rollback helper' "$ROOT/scripts/install.sh"
+grep -Fq 'KEEP_TMP=1' "$ROOT/scripts/install-from-github.sh"
+grep -Fq 'source checkout retained at' "$ROOT/scripts/install-from-github.sh"
 grep -Fq 'deployed_kernel="$(sudo cat "$deployment_kernel_marker")"' "$ROOT/scripts/rollback.sh"
 grep -Fq 'backup_once "/etc/systemd/system/$unit"' "$ROOT/scripts/deploy-services.sh"
 grep -Fq 'systemctl enable surface7-front-camera.timer' "$ROOT/scripts/deploy-services.sh"

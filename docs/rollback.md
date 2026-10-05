@@ -1,6 +1,12 @@
 # Rollback
 
-Run from the repository as the desktop user:
+The installer copies a self-contained rollback helper and its two configuration files into the product-owned directory before deployment starts. Run it as the desktop user; it will ask sudo when needed:
+
+~~~sh
+/usr/local/lib/surface7-ubuntu-frontcamera/scripts/rollback.sh
+~~~
+
+This persistent path works after the one-line GitHub installer removes its successful temporary checkout. If deployment fails, that installer keeps the checkout and prints its rollback command. A local clone can also run:
 
 ~~~sh
 ./scripts/rollback.sh
@@ -14,7 +20,7 @@ The libcamera build is staged first. Deployment copies only its product-specific
 
 The earlier test's backups remain under the product backup directory, in a child directory named for the retired custom-kernel target. This is a historical backup path, not the new kernel target. Keep it until the host and any future deployment are checked; do not delete it as part of kernel-package cleanup. Rollback restores module files on disk but does not unload modules that are already running; reboot manually to return to the selected kernel's module state.
 
-As of 5 October 2026, the host is running Ubuntu's HWE kernel with the previously installed experimental DKMS camera modules. The obsolete custom-kernel and header packages were purged at the user's request. A later timer-only deployment saved the prior service state and unit contents under the same product backup directory; it leaves running camera processes untouched. The OV5693 tuning and four-buffer loopback settings described in the current investigation have not yet been deployed persistently. The historical rollback backup directory may remain after those packages are purged.
+As of 5 October 2026, the host is running Ubuntu's HWE kernel with experimental DKMS camera modules. A later timer-only deployment saved the prior service state and unit contents under the same product backup directory; it leaves running camera processes untouched. The current deployment includes the pinned OV5693 tuning file and four-buffer loopback setting. The historical rollback backup directory may remain after the retired kernel packages were purged.
 
 APT packages installed to build or run the stack remain installed after rollback. Removing those packages is a separate, optional cleanup and is not performed by this script.
 

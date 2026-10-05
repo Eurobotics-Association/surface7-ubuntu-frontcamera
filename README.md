@@ -44,11 +44,19 @@ The deployed stack is still under validation. Do not treat a successful DKMS bui
 
 ## Rollback
 
+The installer places a self-contained rollback helper in the product directory before deploying system files. This path works after the one-line GitHub installer has cleaned up its temporary checkout:
+
+~~~sh
+/usr/local/lib/surface7-ubuntu-frontcamera/scripts/rollback.sh
+~~~
+
+If you installed from a local clone, the checkout's copy also works:
+
 ~~~sh
 ./scripts/rollback.sh
 ~~~
 
-Rollback verifies the ownership marker, stops and disables the camera services, restores saved files and modules, removes product-scoped files, and refreshes the module and dynamic linker databases. APT packages remain installed.
+If deployment fails, the GitHub installer keeps its temporary source checkout and prints its rollback path. Rollback verifies the ownership marker, stops and disables the camera services, restores saved files and modules, removes product-scoped files, and refreshes the module and dynamic linker databases. APT packages remain installed.
 
 ## Repository contents
 

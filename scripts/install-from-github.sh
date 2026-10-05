@@ -12,6 +12,21 @@ command -v git >/dev/null 2>&1 || {
     exit 1
 }
 TMP="$(mktemp -d -t surface7-frontcamera.XXXXXXXX)"
-trap 'rm -rf "$TMP"' EXIT
+KEEP_TMP=0
+cleanup() {
+    if [[ "$KEEP_TMP" -eq 0 ]]; then
+        rm -rf -- "$TMP"
+    fi
+}
+trap cleanup EXIT
 git clone --depth 1 --branch "$REF" "$REPOSITORY" "$TMP/repository"
-"$TMP/repository/scripts/install.sh" "$@"
+if "$TMP/repository/scripts/install.sh" "$@"; then
+    exit 0
+else
+    status=$?
+    KEEP_TMP=1
+    echo "Installation failed; source checkout retained at $TMP/repository." >&2
+    echo "If deployment created its ownership marker, roll back with:" >&2
+    echo "  $TMP/repository/scripts/rollback.sh" >&2
+    exit "$status"
+fi
