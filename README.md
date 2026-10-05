@@ -4,9 +4,7 @@ This repository adapts the Surface Pro 7 IPU4P camera stack for Ubuntu 24.04 and
 
 ## Current target and status
 
-The deployment scripts still contain a legacy `6.19.8-surface-3` pin and must not be used until the approved kernel/DKMS plan is implemented. The target is the latest Ubuntu HWE kernel installed on the machine, detected at build time with matching headers. See [the DKMS and kernel plan](docs/dkms-plan.md) and [test record](docs/testing.md).
-
-The last build-only validation passed against the legacy 6.19.8 headers. It did not test or validate the camera on the current Ubuntu HWE kernel. No live Surface 7 camera frames have been captured, so Ubuntu camera support remains unvalidated.
+The host is running Ubuntu's latest installed HWE generic kernel; the out-of-tree camera modules are registered with DKMS and installed for the current and a second installed Ubuntu kernel. The boot helper created the IPU4 media graph, but root-privileged GStreamer enumeration and capture attempts timed out without producing frames while the kernel reported CSE firmware-authentication errors. A 60-second systemd timer is now deployed for the next boot; its effect on camera capture remains untested. Camera support remains experimental. See the [DKMS and kernel plan](docs/dkms-plan.md) and [test record](docs/testing.md).
 
 ## Camera path
 
@@ -15,18 +13,34 @@ OV5693 front RGB sensor -> Intel IPU4P -> libcamera SimplePipeline / SoftISP
 -> GStreamer libcamerasrc -> video conversion/scaling -> v4l2loopback /dev/video83
 ~~~
 
-The planned design uses GStreamer and libcamera's `libcamerasrc`. It does not use a PipeWire camera source, SPA plugin, or WirePlumber camera rule. When deployed, the system service keeps the physical front camera active; its privacy indicator should be treated as active while the bridge runs.
+The design uses GStreamer and libcamera's `libcamerasrc`. It does not use a PipeWire camera source, SPA plugin, or WirePlumber camera rule. The system timer starts the bridge after the delayed IPU4 initialization; its privacy indicator should be treated as active while the bridge runs.
 
-## Before deployment
+## Status and diagnostics
 
-Use read-only inspection while the revised installer is under review:
+Use these read-only checks to inspect the host:
 
 ~~~sh
 ./scripts/check-system.sh
 ./scripts/status.sh
 ~~~
 
-Do not run `install.sh --install` or `install.sh --build-only` yet: both still target the legacy kernel. Deployment instructions will be restored after the approved plan is implemented and the scripts select the current Ubuntu kernel and headers.
+After an existing deployment, update only the systemd units with:
+
+~~~sh
+bash ./scripts/deploy-services.sh
+~~~
+
+This checks the ownership marker, backs up unit files and their original enabled states once, enables the 60-second boot timer, and disables direct boot activation. It leaves an already-running camera process alone; the change takes effect on the next boot. Use the normal rollback command to restore the saved service state.
+
+For a fresh install directly from the public GitHub repository, run:
+
+~~~sh
+curl -fsSL https://raw.githubusercontent.com/Eurobotics-Association/surface7-ubuntu-frontcamera/main/scripts/install-from-github.sh | bash -s -- --install
+~~~
+
+This downloads the installer from `main`, checks/installs required Ubuntu packages, builds for the running Ubuntu kernel, and deploys the experimental camera stack. It asks for sudo when needed. Review the script and repository first; do not use this command to upgrade an existing deployment without first following the rollback instructions.
+
+The current deployed stack is still under live validation. Do not treat a successful DKMS build, loaded modules, or `/dev/media0` alone as proof that the camera works. A pass requires moving, non-black frames from `/dev/video83`.
 
 ## Rollback
 
@@ -41,7 +55,7 @@ Rollback verifies the ownership marker, stops and disables the camera services, 
 - `upstream/surface-pro-7-camera/` — pinned vendor source, kept unchanged.
 - `scripts/prepare-upstream-installer.py` — checksum-checked Ubuntu adaptations to a temporary copy.
 - `scripts/install-build-deps.sh` — checks and installs Ubuntu build and GStreamer packages.
-- `scripts/install.sh` — currently legacy-pinned; do not use until revised.
+- `scripts/install.sh` — selects the running Ubuntu kernel; deployment and DKMS are installed, while camera capture remains under validation.
 - `scripts/rollback.sh` — ownership-checked restoration of replaced system state.
 - `docs/` — research, evidence, rollback behavior, and the proposed kernel/DKMS plan.
 

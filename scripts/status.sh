@@ -35,6 +35,8 @@ fi
 printf '\nSystem service:\n'
 systemctl is-enabled sp7-camera-boot.service 2>/dev/null || true
 systemctl is-active sp7-camera-boot.service 2>/dev/null || true
+systemctl is-enabled surface7-front-camera.timer 2>/dev/null || true
+systemctl is-active surface7-front-camera.timer 2>/dev/null || true
 printf '\nGStreamer front-camera bridge:\n'
 systemctl is-enabled surface7-front-camera.service 2>/dev/null || true
 systemctl is-active surface7-front-camera.service 2>/dev/null || true

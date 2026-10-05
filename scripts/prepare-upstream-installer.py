@@ -10,7 +10,7 @@ import sys
 
 PINNED_SHA256 = "e389583af1cf99a46e51377332b95236f153737e4685f8a171a4aabb2390ef6b"
 LIBDIR = "/usr/local/lib/surface7-ubuntu-frontcamera"
-KERNEL = "6.19.8-surface-3"
+KERNEL = "${SURFACE7_TARGET_KERNEL:-$(uname -r)}"
 NL = chr(10)
 BS = chr(92)
 
@@ -68,7 +68,7 @@ def main() -> int:
         "#   Fedora Workstation 43\n#   x86_64\n"
         "#   kernel 6.19.8-3.surface.fc43.x86_64",
         "# Surface Pro 7 front-camera installer\n#\n# Ubuntu 24.04, x86_64\n"
-        "# linux-surface kernel 6.19.8-surface-3\n# GStreamer libcamerasrc to V4L2",
+        "# currently running Ubuntu kernel with matching headers\n# GStreamer libcamerasrc to V4L2",
         "Ubuntu installer header",
     )
     source = replace_once(
@@ -77,7 +77,7 @@ def main() -> int:
         "# camera stack was validated. --allow-untested-distro permits deliberate\n"
         "# experiments on other distributions/kernel versions while retaining the\n"
         "# Surface Pro 7, x86_64, IPU4P, kernel-build-tree and Secure Boot checks.",
-        "# The default mode targets Ubuntu 24.04 and the pinned linux-surface kernel.\n"
+        "# The default mode targets Ubuntu 24.04 and the selected Ubuntu kernel.\n"
         "# --allow-untested-distro permits deliberate kernel experiments while retaining\n"
         "# the Surface Pro 7, x86_64, IPU4P, kernel-build-tree and Secure Boot checks.",
         "Ubuntu installer support comment",
@@ -86,13 +86,39 @@ def main() -> int:
         source,
         "      Permit deliberate testing outside the known-good Fedora 43/kernel\n"
         "      combination. Hardware and safety checks remain enforced.",
-        "      Permit deliberate kernel testing outside the pinned Ubuntu target.\n"
+        "      Permit deliberate kernel testing outside the selected Ubuntu target.\n"
         "      Hardware and safety checks remain enforced.",
         "Ubuntu installer help text",
     )
     source = replace_once(source, 'KVER="$(uname -r)"',
                           'KVER="${SURFACE7_TARGET_KERNEL:-$(uname -r)}"',
                           "build-only target kernel override")
+
+    boot_loader = path.parent / "scripts/sp7-camera-boot"
+    boot_source = boot_loader.read_text(encoding="utf-8")
+    surface_kernel_guard = (
+        "# Nur auf einem linux-surface-Kernel tätig werden." + NL
+        + "case \"$KREL\" in" + NL
+        + "    *surface*)" + NL
+        + "        ;;" + NL
+        + "    *)" + NL
+        + "        log \"Kein linux-surface-Kernel – Kamera-Loader wird übersprungen.\"" + NL
+        + "        exit 0" + NL
+        + "        ;;" + NL
+        + "esac"
+    )
+    ubuntu_kernel_guard = (
+        "# Ubuntu generic kernels are supported when this product's DKMS stack is installed." + NL
+        + 'if [[ ! -e "/lib/modules/$KREL/updates/dkms/intel-ipu4p.ko" && ' + BS + NL
+        + '      ! -e "/lib/modules/$KREL/updates/dkms/intel-ipu4p.ko.zst" ]]; then' + NL
+        + '    log "Surface 7 IPU4P DKMS module is not installed for $KREL; skipping."' + NL
+        + "    exit 0" + NL
+        + "fi"
+    )
+    boot_source = replace_once(boot_source, surface_kernel_guard, ubuntu_kernel_guard,
+                               "Ubuntu HWE DKMS boot-loader kernel guard")
+    boot_loader.write_text(boot_source, encoding="utf-8")
+
     source = replace_once(
         source,
         'if [[ "${ID:-}" == "fedora" && "${VERSION_ID:-}" == "$EXPECTED_FEDORA" ]]; then',
@@ -160,6 +186,31 @@ def main() -> int:
         + '        || die "Matching Ubuntu kernel headers could not be installed."'
     )
     source = replace_once(source, fedora_headers, ubuntu_headers, "Ubuntu header package")
+
+    kmod_start = source.index('make ' + BS + NL + '    -C "$KDIR" ' + BS + NL
+                              + '    M="$KMOD_SRC"')
+    kmod_end_marker = 'done' + NL + NL + '# -------------------------------------------------------------------------' + NL + '# IPU4P stack'
+    kmod_end = source.index(kmod_end_marker, kmod_start) + len('done')
+    kmod_block = source[kmod_start:kmod_end]
+    source = (source[:kmod_start]
+              + 'if [[ "$BUILD_ONLY" -eq 1 ]]; then' + NL
+              + kmod_block + NL + 'fi'
+              + source[kmod_end:])
+
+    ipu_build_start = source.index('(' + NL + '    cd "$IPU4_SRC"')
+    ipu_build_end_marker = "    printf 'PASS: %s\\n' \"$module\"" + NL + 'done'
+    ipu_build_end = source.index(ipu_build_end_marker, ipu_build_start) + len(ipu_build_end_marker)
+    ipu_build_block = source[ipu_build_start:ipu_build_end]
+    source = (source[:ipu_build_start] + 'if [[ "$BUILD_ONLY" -eq 1 ]]; then' + NL
+              + ipu_build_block + NL + 'fi' + source[ipu_build_end:])
+
+    v4l2_start = source.index('make ' + BS + NL + '    -C "$V4L2_SRC"')
+    v4l2_end_marker = '    || die "Unexpected v4l2loopback version: $V4L2_VERSION"'
+    v4l2_end = source.index(v4l2_end_marker, v4l2_start) + len(v4l2_end_marker)
+    v4l2_block = source[v4l2_start:v4l2_end]
+    source = (source[:v4l2_start] + 'if [[ "$BUILD_ONLY" -eq 1 ]]; then' + NL
+              + v4l2_block + NL + 'fi' + source[v4l2_end:])
+
     source = replace_once(
         source,
         "for gst_element in pipewiresrc videoconvert filesink; do",
@@ -228,11 +279,75 @@ PY
 
     source = replace_once(
         source,
+        "else" + NL
+        + '    sudo meson install ' + BS + NL
+        + '        -C "$LIBCAMERA_BUILD"' + NL,
+        "else" + NL
+        + '    mkdir -p "$STAGE"' + NL
+        + '    DESTDIR="$STAGE" meson install ' + BS + NL
+        + '        -C "$LIBCAMERA_BUILD"' + NL + NL
+        + '    staged_libdir="$STAGE' + LIBDIR + '"' + NL
+        + '    [[ -d "$staged_libdir" ]] || die "Staged libcamera library directory is missing."' + NL
+        + '    sudo install -d -m 0755 ' + LIBDIR + NL
+        + '    sudo cp -a "$staged_libdir/." ' + LIBDIR + '/' + NL,
+        "stage libcamera and install only the product library directory",
+    )
+
+    source = replace_once(
+        source,
         'log "Installing verified IPU4P firmware"' + NL + NL + 'FW_SOURCE=',
         'log "Installing verified IPU4P firmware"' + NL + NL
         + "backup_system_file /usr/lib/firmware/ipu4p_cpd.bin" + NL + NL + "FW_SOURCE=",
         "firmware backup",
     )
+
+    dkms_module_install = '''# Register and install kernel modules through Ubuntu DKMS.
+
+log "Registering the verified modules with DKMS"
+DKMS_PACKAGE="surface7-ubuntu-frontcamera"
+DKMS_VERSION="0.1.0"
+DKMS_SOURCE="/usr/src/${DKMS_PACKAGE}-${DKMS_VERSION}"
+[[ "$(dpkg-query -W -f='${db:Status-Status}' dkms 2>/dev/null || true)" == installed ]] \\
+    || die "Ubuntu package dkms is required."
+if sudo test -e "$DKMS_SOURCE"; then
+    die "DKMS source directory already exists: $DKMS_SOURCE. Roll back the owned deployment before retrying."
+fi
+
+# Strip build products so DKMS owns clean, reproducible sources for each kernel.
+make -C "$KDIR" M="$KMOD_SRC" clean >/dev/null
+make -C "$KDIR" M="$IPU4_SRC/linux-6.19.8/drivers/media/pci/intel" \\
+    EXTERNAL_BUILD=1 srcpath="$IPU4_SRC/linux-6.19.8/drivers/media/pci/intel" \\
+    CONFIG_VIDEO_INTEL_IPU=m CONFIG_VIDEO_INTEL_IPU4P=y \\
+    CONFIG_VIDEO_INTEL_IPU6= CONFIG_VIDEO_IPU3_CIO2= CONFIG_INTEL_VSC= \\
+    CONFIG_VIDEO_INTEL_IPU_FW_LIB=y clean >/dev/null
+make -C "$KDIR" M="$V4L2_SRC" clean >/dev/null
+
+sudo install -d -m 0755 "$DKMS_SOURCE/kernel-modules" "$DKMS_SOURCE/ipu4-camera" \\
+    "$DKMS_SOURCE/v4l2loopback" "$DKMS_SOURCE/scripts"
+sudo install -m 0644 "$ROOT/config/ownership-marker" \\
+    "$DKMS_SOURCE/.surface7-ubuntu-frontcamera-owned"
+for file in ov8865.c dw9719.c ipu-bridge.c Makefile; do
+    sudo install -m 0644 "$KMOD_SRC/$file" "$DKMS_SOURCE/kernel-modules/$file"
+done
+sudo cp -a "$IPU4_SRC/." "$DKMS_SOURCE/ipu4-camera/"
+sudo cp -a "$V4L2_SRC/." "$DKMS_SOURCE/v4l2loopback/"
+sudo install -m 0644 "$ROOT/dkms.conf" "$DKMS_SOURCE/dkms.conf"
+sudo install -m 0755 "$ROOT/scripts/dkms-build-modules.sh" \\
+    "$DKMS_SOURCE/scripts/dkms-build-modules.sh"
+sudo install -m 0755 "$ROOT/scripts/dkms-pre-install.sh" \\
+    "$DKMS_SOURCE/scripts/dkms-pre-install.sh"
+
+sudo dkms add -m "$DKMS_PACKAGE" -v "$DKMS_VERSION"
+sudo dkms build -m "$DKMS_PACKAGE" -v "$DKMS_VERSION" -k "$KVER"
+sudo dkms install -m "$DKMS_PACKAGE" -v "$DKMS_VERSION" -k "$KVER"
+sudo depmod -a "$KVER"
+sudo dkms status -m "$DKMS_PACKAGE" -v "$DKMS_VERSION"'''
+    install_start = source.index("# Install kernel modules")
+    install_end_marker = 'sudo depmod -a "$KVER"'
+    install_end = source.index(install_end_marker, install_start) + len(install_end_marker)
+    if source.count(install_end_marker) != 1:
+        raise SystemExit("Expected exactly one direct module installation section")
+    source = source[:install_start] + dkms_module_install + source[install_end:]
 
     root = path.parent
     loopback_config = root / "config/modprobe.d/sp7-v4l2loopback.conf"
@@ -297,13 +412,19 @@ install_system_file \
     /etc/default/surface7-front-camera \
     0644
 record_unit_enablement_state surface7-front-camera.service
+record_unit_enablement_state sp7-camera-boot.service
+record_unit_enablement_state surface7-front-camera.timer
+backup_system_file /etc/systemd/system/surface7-front-camera.timer
+sudo install -D -m 0644 "$ROOT/ubuntu-deployment/sp7-camera-boot.service" /etc/systemd/system/sp7-camera-boot.service
+sudo install -D -m 0644 "$ROOT/ubuntu-deployment/surface7-front-camera.timer" /etc/systemd/system/surface7-front-camera.timer
 install_system_file \
     "$ROOT/ubuntu-deployment/surface7-front-camera.service" \
     /etc/systemd/system/surface7-front-camera.service \
     0644
 
 sudo systemctl daemon-reload
-sudo systemctl enable surface7-front-camera.service
+sudo systemctl disable surface7-front-camera.service sp7-camera-boot.service 2>/dev/null || true
+sudo systemctl enable surface7-front-camera.timer
 [[ -f "$GSTREAMER_PLUGIN" ]] || die "Installed libcamera GStreamer plugin is missing."
 GST_PLUGIN_PATH="$(dirname "$GSTREAMER_PLUGIN")" \
     gst-inspect-1.0 libcamerasrc >/dev/null \
@@ -323,6 +444,12 @@ gst-inspect-1.0 v4l2sink >/dev/null \
         + 'install_system_file \\' + NL
         + '    "$ROOT/systemd/system/sp7-camera-boot.service"',
         "preserve prior boot service enablement before replacing the unit",
+    )
+    source = replace_once(
+        source,
+        'sudo systemctl enable sp7-camera-boot.service',
+        'sudo systemctl disable sp7-camera-boot.service 2>/dev/null || true',
+        "prevent immediate camera boot service activation",
     )
     start = source.index("# Per-user WirePlumber and controller configuration")
     end = source.index("# Final static verification", start)
@@ -391,7 +518,7 @@ gst-inspect-1.0 v4l2sink >/dev/null \
 
     path.write_text(source, encoding="utf-8")
     print(f"Prepared Ubuntu installer at {path}")
-    print(f"Target kernel: {KERNEL}")
+    print(f"Target kernel expression: {KERNEL}")
     print(f"Product library directory: {LIBDIR}")
     return 0
 

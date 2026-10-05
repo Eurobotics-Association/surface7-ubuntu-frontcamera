@@ -2,17 +2,18 @@
 
 Research reviewed before deployment planning, 4 October 2026.
 
-Updated 5 October 2026 after the host target was corrected: the target is the latest Ubuntu HWE kernel installed on the Surface, with matching headers. The legacy `6.19.8-surface-3` target is not the user's requested target and is slated for removal. This public repository omits exact host-kernel inventory.
+Updated 5 October 2026 after the host target was corrected: the target is the latest Ubuntu HWE kernel installed on the Surface, with matching headers. The legacy `6.19.8-surface-3` target is not the user's requested target and has been removed. This public repository omits exact host-kernel inventory.
 
 ## Hardware and capture path
 
 The [Linux Surface discussion #1353](https://github.com/linux-surface/linux-surface/discussions/1353) reports the Surface Pro 7 IPU4P stack working with the front OV5693 sensor and rear camera. It is useful evidence about the Surface 7 hardware and kernel drivers; its reported desktop camera bridge is not used here.
 
-The more directly relevant capture reference is [sp7-ipu4-camera](https://github.com/georgemihaila/sp7-ipu4-camera). Its [front-camera notes](https://github.com/georgemihaila/sp7-ipu4-camera/blob/main/docs/front-camera.md) give a GStreamer pipeline using libcamera's libcamerasrc and v4l2sink for ACPI camera ID \_SB_.PCI0.I2C2.CAMF. The reference's README identifies its native camera bridge as unreliable for image capture and describes the GStreamer route through V4L2 loopback. This project adapts that direct GStreamer design and builds the needed libcamera plugin from pinned source.
+
+The newer [ConsultingFuture4200/sp7-camera work](https://github.com/ConsultingFuture4200/sp7-camera) reports both SP7 cameras capturing through IPU4P and libcamera. Its 2026-09-20 update adds fixes for ISYS probe faults, frame-size enumeration on the clean BE SOC capture path, and Windows-derived front-camera receiver timing. Its [runtime notes](https://github.com/ConsultingFuture4200/sp7-camera/blob/main/docs/both-cameras-working.md#runtime) say to prevent module autoload, load the stack once after boot, and pin MMU1 on before ISYS creates the video nodes; udev probing and an early CSE handshake can otherwise wedge initialization. The local boot helper already follows the ordered load and MMU1 pin steps. This project tests a 60-second systemd timer as a repeatable way to defer that one-time load; the reference does not prescribe that exact interval. The recipe is validated against a 6.19.8 kernel, and its author explicitly says those patches do not apply directly to 7.x. It is the latest driver evidence, but not a drop-in replacement for this Ubuntu HWE target; it needs an audited forward-port.
 
 The [official libcamera GStreamer documentation](https://docs.libcamera.org/master/getting-started.html) documents libcamerasrc as an optional GStreamer source plugin. The Ubuntu deployment uses APT packages for the build environment and builds the camera libraries from pinned source.
 
-These reports establish a plausible Surface 7 implementation, not a validated Ubuntu result. The final Ubuntu-specific package and service configuration still requires local camera tests.
+These reports establish plausible Surface 7 implementations, not a validated Ubuntu result. The GStreamer approach remains the selected path; PipeWire camera integration is out of scope. The Ubuntu-specific package and service configuration still requires local moving-frame tests.
 
 ## Earlier Zorin OS report
 
@@ -24,17 +25,17 @@ The complete Eurobotics-Association/surface5-frontcamera repository was read bef
 
 ## Ubuntu adaptation
 
-The Surface 7 source release's installer targets a different Linux distribution, package manager, and kernel release. Existing local adaptations use Ubuntu APT and a project-specific library directory, but they are pinned to the now-obsolete `6.19.8-surface-3`. The next implementation must instead build against the selected Ubuntu kernel and matching headers. The vendor snapshot remains unchanged.
+The Surface 7 source release's installer targets a different Linux distribution, package manager, and kernel release. The local adapter uses Ubuntu APT, selects the running Ubuntu HWE kernel with matching headers, stages userspace output in a project-specific library directory, and registers kernel modules through DKMS. DKMS installation and a build for another installed Ubuntu kernel succeeded. The adapter changes only a temporary copy; the vendor snapshot remains unchanged. The installed driver source already includes equivalents of the newer frame-size enumeration and SP7 front timing fixes. Current live capture still fails while IPU firmware authentication logs errors; a timer-delayed, one-time boot initialization is deployed for the next reboot, based on the reference's autoload and MMU1 findings.
 
 ## Current-kernel compatibility
 
-The target is Ubuntu 24.04 x86_64 with the latest installed Ubuntu HWE kernel. The [Linux Surface IPU4 discussion](https://github.com/linux-surface/linux-surface/discussions/1353) contains recent Surface Pro 7 reports of the IPU4P stack and OV5693 front camera working, including a driver patch series validated on Linux 6.19.8. Those reports make the driver path promising, but do not establish that the same source compiles or works against the host's current Ubuntu HWE kernel. That is the next compatibility check; no camera support claim is made yet.
+The target is Ubuntu 24.04 x86_64 with the latest installed Ubuntu HWE kernel. The [Linux Surface IPU4 discussion](https://github.com/linux-surface/linux-surface/discussions/1353) reports the newer Surface Pro 7 patch series validated on Linux 6.19.8. This project's DKMS modules build and load on the host's current Ubuntu HWE kernel, and the media graph is created, but root-privileged GStreamer capture attempts time out without frames while kernel logs show CSE firmware-authentication failures. A successful DKMS build does not establish runtime compatibility. The project's deployment still needs validation that module autoload is blocked on this Ubuntu installation before the timer-driven load.
 
 ## DKMS assessment
 
 DKMS is a plausible way to keep the out-of-tree IPU4P and loopback kernel modules rebuilt when Ubuntu installs a new kernel. Its module source must remain under `/usr/src` with a valid `dkms.conf`; `AUTOINSTALL="yes"` enables automatic attempts, and `dkms autoinstall` installs modules built for other kernel revisions. A matching kernel headers package is still needed, and DKMS recompiles modules for each kernel version. It does not make an incompatible driver patch compatible with a new kernel or guarantee the build succeeds. See the [Ubuntu 24.04 DKMS manual](https://manpages.ubuntu.com/manpages/noble/man8/dkms.8.html) and [upstream DKMS manual](https://github.com/dkms-project/dkms/blob/main/dkms.8.in).
 
-The plan is to prove the module sources against the host's current Ubuntu kernel first, then package those sources for DKMS only after a normal build and live camera test pass. The separately built libcamera/GStreamer userspace components are not DKMS modules; kernel upgrades do not normally require rebuilding them, though the camera path must be rechecked after kernel-driver changes.
+The plan approved on 5 October 2026 is to build the kernel sources against the host's current Ubuntu kernel, then register the modules with DKMS. The modules compile and load, but this alone does not prove runtime compatibility. The separately built libcamera/GStreamer userspace components are not DKMS modules; kernel upgrades do not normally require rebuilding them, though the camera path must be rechecked after kernel-driver changes. Moving-frame validation remains pending.
 
 ## Surface Pro 7 ventilation context
 

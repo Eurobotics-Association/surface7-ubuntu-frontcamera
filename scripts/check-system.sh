@@ -39,11 +39,11 @@ printf 'Architecture: %s\n' "$arch"
 running="$(uname -r)"
 printf 'Running kernel: %s\n' "$running"
 if [[ "$running" == "$SURFACE7_TARGET_KERNEL" ]]; then
-    ok "Target Surface kernel is running"
+    ok "Selected Ubuntu kernel is running"
 elif [[ "$BUILD_TARGET" -eq 1 ]]; then
     soft "Build target differs from running kernel; build-only will use $SURFACE7_TARGET_KERNEL"
 else
-    bad "Boot $SURFACE7_TARGET_KERNEL before installation"
+    bad "Selected kernel $SURFACE7_TARGET_KERNEL is not running"
 fi
 if [[ -f "/lib/modules/$SURFACE7_TARGET_KERNEL/build/Makefile" ]]; then
     ok "Target kernel build tree exists"

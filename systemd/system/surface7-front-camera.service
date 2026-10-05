@@ -3,6 +3,8 @@ Description=Surface Pro 7 front camera GStreamer bridge
 Requires=sp7-camera-boot.service
 After=sp7-camera-boot.service
 ConditionPathExists=/dev/video83
+StartLimitIntervalSec=60
+StartLimitBurst=3
 
 [Service]
 Type=simple
@@ -11,8 +13,3 @@ EnvironmentFile=/etc/default/surface7-front-camera
 ExecStart=/usr/local/libexec/surface7-front-camera
 Restart=on-failure
 RestartSec=5
-StartLimitIntervalSec=60
-StartLimitBurst=3
-
-[Install]
-WantedBy=multi-user.target

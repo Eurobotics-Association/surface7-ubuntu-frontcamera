@@ -20,8 +20,8 @@ Usage:
   ./scripts/install.sh --build-only
   ./scripts/install.sh --install
 
---build-only targets 6.19.8-surface-3 and makes no system changes.
---install requires that target kernel to be running and asks sudo for system deployment.
+--build-only targets the currently running Ubuntu kernel and makes no system changes.
+--install requires that kernel to be running and asks sudo for system deployment.
 EOF
             exit 0
             ;;
@@ -46,7 +46,7 @@ if [[ "$MODE" == install ]]; then
         exit 1
     fi
     if [[ "$(uname -r)" != "$SURFACE7_TARGET_KERNEL" ]]; then
-        echo "Installation requires booting $SURFACE7_TARGET_KERNEL first." >&2
+        echo "Installation requires selected kernel $SURFACE7_TARGET_KERNEL to be running." >&2
         exit 1
     fi
     "$ROOT/scripts/install-build-deps.sh"
@@ -68,7 +68,13 @@ cp -a "$ROOT/upstream/surface-pro-7-camera" "$upstream"
 mkdir -p "$upstream/ubuntu-deployment"
 install -m 0755 "$ROOT/scripts/surface7-front-camera" "$upstream/ubuntu-deployment/surface7-front-camera"
 install -m 0644 "$ROOT/systemd/system/surface7-front-camera.service" "$upstream/ubuntu-deployment/surface7-front-camera.service"
+install -m 0644 "$ROOT/systemd/system/surface7-front-camera.timer" "$upstream/ubuntu-deployment/surface7-front-camera.timer"
+install -m 0644 "$ROOT/systemd/system/sp7-camera-boot.service" "$upstream/ubuntu-deployment/sp7-camera-boot.service"
 install -m 0644 "$ROOT/config/front-camera.env" "$upstream/ubuntu-deployment/front-camera.env"
+install -D -m 0755 "$ROOT/scripts/dkms-build-modules.sh" "$upstream/scripts/dkms-build-modules.sh"
+install -D -m 0755 "$ROOT/scripts/dkms-pre-install.sh" "$upstream/scripts/dkms-pre-install.sh"
+install -D -m 0644 "$ROOT/dkms/dkms.conf" "$upstream/dkms.conf"
+install -D -m 0644 "$ROOT/config/ownership-marker" "$upstream/config/ownership-marker"
 python3 "$ROOT/scripts/prepare-upstream-installer.py" "$upstream/install.sh"
 chmod +x "$upstream/install.sh"
 export SURFACE7_TARGET_KERNEL
@@ -82,11 +88,13 @@ if [[ "$MODE" == build ]]; then
     "$upstream/install.sh" --build-only
     exit $?
 fi
-echo "Creating the product ownership marker for safe rollback."
-sudo -v
-sudo install -d -m 0755 "$SURFACE7_LIBDIR"
-sudo install -m 0644 "$ROOT/config/ownership-marker" \
-    "$SURFACE7_LIBDIR/.surface7-ubuntu-frontcamera-owned"
+    echo "Creating the product ownership marker for safe rollback."
+    sudo -v
+    sudo install -d -m 0755 "$SURFACE7_LIBDIR"
+    sudo install -m 0644 "$ROOT/config/ownership-marker" \
+        "$SURFACE7_LIBDIR/.surface7-ubuntu-frontcamera-owned"
+    printf '%s\n' "$SURFACE7_TARGET_KERNEL" | sudo tee \
+        "$SURFACE7_LIBDIR/deployment-kernel" >/dev/null
 "$upstream/install.sh"
 printf '\nDeployment files installed. Reboot into %s before camera validation.\n' "$SURFACE7_TARGET_KERNEL"
 printf 'Rollback command: %s/scripts/rollback.sh\n' "$ROOT"

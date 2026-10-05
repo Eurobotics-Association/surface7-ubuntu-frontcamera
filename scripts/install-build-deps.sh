@@ -17,7 +17,7 @@ if [[ "${ID:-}" != "$SURFACE7_OS_ID" || "${VERSION_ID:-}" != "$SURFACE7_OS_VERSI
 fi
 
 required_packages=(
-    git git-lfs build-essential cmake meson ninja-build patch pkg-config
+    git git-lfs build-essential cmake meson ninja-build patch pkg-config dkms
     python3-jinja2 python3-ply python3-yaml libyaml-dev libssl-dev libevent-dev
     libelf-dev libunwind-dev libsystemd-dev libglib2.0-dev libdrm-dev
     libjpeg-dev libtiff-dev libsdl2-dev libegl1-mesa-dev libgles2-mesa-dev
