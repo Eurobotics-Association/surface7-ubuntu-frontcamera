@@ -20,6 +20,7 @@ cp -a "$ROOT/upstream/surface-pro-7-camera" "$tmp/upstream"
 mkdir -p "$tmp/upstream/scripts" "$tmp/upstream/ubuntu-deployment"
 install -m 0644 "$ROOT/systemd/system/surface7-front-camera.service" \
     "$tmp/upstream/ubuntu-deployment/surface7-front-camera.service"
+grep -Fq 'Restart=no' "$ROOT/systemd/system/surface7-front-camera.service"
 install -m 0644 "$ROOT/systemd/system/surface7-front-camera.timer" \
     "$tmp/upstream/ubuntu-deployment/surface7-front-camera.timer"
 install -m 0644 "$ROOT/systemd/system/sp7-camera-boot.service" \
@@ -33,6 +34,16 @@ install -m 0755 "$ROOT/scripts/dkms-pre-install.sh" "$tmp/upstream/scripts/dkms-
 install -m 0644 "$ROOT/dkms/dkms.conf" "$tmp/upstream/dkms.conf"
 python3 "$ROOT/scripts/prepare-upstream-installer.py" "$tmp/upstream/install.sh"
 adapted="$tmp/upstream/install.sh"
+
+grep -Fq 'options intel_ipu4p fw_version_check=0' \
+    "$ROOT/upstream/surface-pro-7-camera/config/modprobe.d/ipu4p.conf"
+if grep -Fq 'fw_version_check' "$tmp/upstream/config/modprobe.d/ipu4p.conf"; then
+    echo "Temporary Ubuntu config still requests an unsupported IPU4P parameter." >&2
+    exit 1
+fi
+grep -Fq 'sp7_full_fw_recycle_on_first_stream=Y' \
+    "$tmp/upstream/config/modprobe.d/ipu4p.conf"
+grep -Fq 'Restart=no' "$ROOT/systemd/system/surface7-front-camera.service"
 
 grep -Fq 'EXPECTED_KERNEL="${SURFACE7_TARGET_KERNEL:-$(uname -r)}"' "$adapted"
 grep -Fq 'EXPECTED_UBUNTU="24.04"' "$adapted"
