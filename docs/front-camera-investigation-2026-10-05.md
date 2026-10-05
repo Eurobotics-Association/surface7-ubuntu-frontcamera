@@ -40,13 +40,13 @@ The module was then restored to its original `max_buffers=2` configuration. The 
 
 A follow-up attempt using the former 2560 × 1600 source mode negotiated caps but did not switch the loopback to capture capability within the bounded startup window, so no readback frame was obtained. That resolution remains unverified. The repository now defaults to the tested 1296 × 972 mode; this updated configuration has not yet been deployed to the host.
 
-## Current interpretation
+## Interpretation before persistent deployment (superseded below)
 
 The target's front camera can now produce visible frames through libcamera's Software ISP, and GStreamer can deliver those frames through `/dev/video83` when the OV5693 tuning data is present and the loopback buffer limit is four. The remaining deployment gap is to make those two required settings part of the rollback-safe installer and then validate the installed service.
 
 Do not repeat the earlier raw-buffer or single-frame `-5` experiments as if they were unresolved sensor failures. The evidence now points to a missing IPA tuning file for RGB conversion and a separate V4L2 loopback buffer limit. Keep support marked experimental: persistent deployment, deliberate moving-subject capture, an ordinary video application's access, improved color, and a later kernel-upgrade check remain outstanding.
 
-## Next steps
+## Plan before persistent deployment
 
 1. Install the pinned CC0 OV5693 tuning file through the product installer and include it in rollback.
 2. Set the loopback module's persistent `max_buffers=4` option in the existing product-specific modprobe configuration; retain `exclusive_caps=1`.
@@ -55,3 +55,19 @@ Do not repeat the earlier raw-buffer or single-frame `-5` experiments as if they
 5. Diagnose the green cast and clipped highlights before calling the camera supported.
 
 Do not reboot for these checks. If a later step requires reboot, broadcast a global warning at least 2 minutes beforehand and wait the full 2 minutes.
+
+## Post-deployment live test update — 5 October 2026
+
+The rollback-safe deployment completed after the existing product installation was rolled back. It installed the pinned OV5693 tuning file and configured the V4L2 loopback for four buffers. The OV5693 tuning checksum was verified against the repository copy. DKMS installed the nine camera/loopback modules for the currently running Ubuntu kernel. A separate `dkms autoinstall` then built and installed them for another already-installed Ubuntu kernel with matching headers. No exact kernel versions are recorded here.
+
+Only `v4l2loopback` was reloaded to apply its four-buffer setting; the IPU modules remained loaded. The camera service was started manually and stayed active. A separate `v4l2src` consumer read `/dev/video83` and saved five 1280 × 720 PNG frames. A three-second, 90-frame recording at 30 fps completed with EOS. Frames sampled near the beginning, middle, and end show the subject move across the scene. The camera is therefore delivering actual changing image frames through the deployed GStreamer/V4L2 path. The private images and recording remained in `/tmp` and were not committed or uploaded.
+
+The frames remain visibly tinted green/purple with low-light noise. Cheese was tested as the logged-in user with `/dev/video83` specified; it enumerated no device and reported “No device found.” A bounded `gst-device-monitor-1.0 Video/Source` probe also listed no devices before timeout, while explicit `v4l2src device=/dev/video83` capture succeeds. Device discovery remains unresolved beyond Cheese alone. Do not describe either discovery probe as passing.
+
+The delayed systemd timer is enabled, but no reboot or kernel upgrade test occurred. The service is running from the manual start. During the DKMS build, observed temperatures ranged from 46.4°C to 48.7°C, below the user's 95°C pause threshold. Reboot testing remains subject to a system-wide warning at least two minutes in advance and a full two-minute wait.
+
+## Updated interpretation and next work
+
+The image-flow problem has converged for direct capture: after rollback-safe installation, the camera now delivers visibly moving frames through libcamera, GStreamer, and `/dev/video83`. The unresolved items are Cheese/ordinary-application enumeration, color/noise quality, delayed startup after reboot, and persistence following a later Ubuntu kernel installation. The camera remains experimental until those integration and persistence checks pass.
+
+Next, inspect V4L2 capability/format advertisement and GStreamer device-provider enumeration without changing desktop services. Continue with GStreamer for image-quality work. Do not reboot unless explicitly authorized; before any approved reboot, broadcast to all logged-in users and wait at least two full minutes.

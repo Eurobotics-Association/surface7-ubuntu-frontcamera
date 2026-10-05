@@ -1,10 +1,10 @@
 # Surface Pro 7 front camera on Ubuntu
 
-This repository adapts the Surface Pro 7 IPU4P camera stack for Ubuntu 24.04 and a GStreamer capture service for the front RGB camera. The GStreamer path has produced viewable frames and V4L2 loopback readback under temporary settings. Persistent deployment, ordinary-app access, moving-subject validation, and color tuning remain; support is experimental.
+This repository adapts the Surface Pro 7 IPU4P camera stack for Ubuntu 24.04 and a GStreamer capture service for the front RGB camera. The installed GStreamer path has produced viewable, visibly moving frames and V4L2 loopback readback. The deployment's rollback path has been exercised. Support remains experimental because Cheese found no camera, colors are poor, and reboot/kernel-upgrade persistence has not been checked.
 
 ## Current target and status
 
-The host is running Ubuntu's latest installed HWE generic kernel; the out-of-tree camera modules are registered with DKMS and installed for the current and a second installed Ubuntu kernel. The front OV5693 produced visible frames at 1296 × 972 with the matching simple-IPA tuning file. A temporary four-buffer loopback reload also allowed separate GStreamer readback from `/dev/video83` at 1280 × 720. The host was restored to its original two-buffer setting after testing; the tuning file and four-buffer option still need rollback-safe deployment. The image currently has a strong green cast and clipped highlights. The one-time `iommu=pt` diagnostic setting is not a proven fix and remains active only for the current boot. See the [DKMS and kernel plan](docs/dkms-plan.md), [test record](docs/testing.md), and [dated investigation log](docs/front-camera-investigation-2026-10-05.md).
+The host is running Ubuntu's latest installed HWE generic kernel; the out-of-tree camera modules are registered with DKMS for the running kernel and another installed kernel with matching headers. The rollback-safe installer is deployed, including the pinned OV5693 simple-IPA tuning file and persistent `max_buffers=4` loopback setting. The service is running after a manual start. An independent `v4l2src` consumer read `/dev/video83`, and a three-second, 90-frame capture showed the operator moving in the scene. Cheese reported “No device found,” and GStreamer `Video/Source` device monitoring listed no devices, so access through normal device discovery is not established. The preview has a strong green/purple cast and low-light noise. No reboot was performed; boot-time and later kernel-upgrade behavior remain unverified. The one-time `iommu=pt` diagnostic setting is not a proven fix and remains active only for the current boot. See the [DKMS and kernel plan](docs/dkms-plan.md), [test record](docs/testing.md), and [dated investigation log](docs/front-camera-investigation-2026-10-05.md).
 
 ## Camera path
 
@@ -13,7 +13,7 @@ OV5693 front RGB sensor -> Intel IPU4P -> libcamera SimplePipeline / SoftISP
 -> GStreamer libcamerasrc -> video conversion/scaling -> v4l2loopback /dev/video83
 ~~~
 
-The design uses GStreamer and libcamera's `libcamerasrc`. It does not use a PipeWire camera source, SPA plugin, or WirePlumber camera rule. The system timer is intended to start the bridge after delayed IPU4 initialization; it is currently disabled during diagnosis. Treat the privacy indicator as active whenever a capture is running.
+The design uses GStreamer and libcamera's `libcamerasrc`. It does not use a PipeWire camera source, SPA plugin, or WirePlumber camera rule. The system timer is enabled to start the bridge after delayed IPU4 initialization; it has not been exercised across a reboot. Treat the privacy indicator as active whenever a capture is running.
 
 ## Status and diagnostics
 
@@ -40,7 +40,7 @@ curl -fsSL https://raw.githubusercontent.com/Eurobotics-Association/surface7-ubu
 
 This downloads the installer from `main`, checks/installs required Ubuntu packages, builds for the running Ubuntu kernel, and deploys the experimental camera stack. It asks for sudo when needed. Review the script and repository first; do not use this command to upgrade an existing deployment without first following the rollback instructions.
 
-The deployed stack is still under validation. Do not treat a successful DKMS build, loaded modules, or `/dev/media0` alone as proof that the camera works. Acceptance requires moving, non-black frames from `/dev/video83`, ordinary video-application access, and persistence after reboot and a later kernel update.
+The deployed stack is still under validation. Do not treat a successful DKMS build, loaded modules, or `/dev/media0` alone as proof that the camera works. Moving, non-black frames from `/dev/video83` are verified. Ordinary camera-application access and persistence after reboot and a later kernel update remain open acceptance items.
 
 ## Rollback
 
@@ -55,7 +55,7 @@ Rollback verifies the ownership marker, stops and disables the camera services, 
 - `upstream/surface-pro-7-camera/` — pinned vendor source, kept unchanged.
 - `scripts/prepare-upstream-installer.py` — checksum-checked Ubuntu adaptations to a temporary copy.
 - `scripts/install-build-deps.sh` — checks and installs Ubuntu build and GStreamer packages.
-- `scripts/install.sh` — selects the running Ubuntu kernel; deployment and DKMS are installed, while camera capture remains under validation.
+- `scripts/install.sh` — checks required Ubuntu packages, selects the running Ubuntu kernel, and deploys the experimental stack through DKMS.
 - `scripts/rollback.sh` — ownership-checked restoration of replaced system state.
 - `docs/` — research, evidence, rollback behavior, and the proposed kernel/DKMS plan.
 

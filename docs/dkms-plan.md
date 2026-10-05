@@ -1,8 +1,8 @@
 # Proposed Ubuntu kernel and DKMS plan
 
-Approved by Robert on 5 October 2026. Implementation and host validation are underway; this is not yet a deployment-ready release.
+Approved by Robert on 5 October 2026. Implementation and rollback-safe deployment are complete for the current experimental build; application discovery and reboot/kernel-upgrade checks remain.
 
-**Status: approved. Kernel selection and build-only validation passed. DKMS install/autoinstall passed for two installed kernels. The front camera now produces viewable frames and V4L2 loopback readback under temporary settings. Rollback-safe deployment, ordinary-application access, moving-subject validation, and image color tuning remain.**
+**Status: DKMS deployment passed for the running kernel and a second installed kernel with matching headers. Rollback and persistent deployment completed. Explicit GStreamer/V4L2 capture produced visibly moving frames, but Cheese and GStreamer device monitoring enumerated no camera. Image color/noise, boot persistence, and later kernel-upgrade behavior remain open. Support stays experimental.**
 
 ## Goal
 
@@ -22,7 +22,7 @@ DKMS can build and install an out-of-tree module for each installed kernel when 
 
 Expected side effects: kernel/header upgrades can take longer while DKMS compiles modules and may temporarily increase CPU use, fan activity, and temperature. Once modules are built and installed for a kernel, routine boots do not normally recompile them; the boot-time autoinstaller can add delay if a module is still missing for that kernel. If compilation fails for a new kernel, the system can still boot, but camera modules may be unavailable on that kernel until the source is fixed or a compatible kernel is selected. Continue work through 95°C; above 95°C pause for 3 minutes, then resume and continue monitoring.
 
-The IPU4P drivers and `v4l2loopback` are packaged as nine DKMS-built modules. libcamera, its GStreamer plugin, and the GStreamer bridge remain userspace components outside DKMS. The source modules compiled against the current Ubuntu kernel in build-only mode; DKMS installed and autoinstalled them for two installed Ubuntu kernels.
+The IPU4P drivers and `v4l2loopback` are packaged as nine DKMS-built modules. libcamera, its GStreamer plugin, and the GStreamer bridge remain userspace components outside DKMS. The deployment installed the modules for the running Ubuntu kernel; a separate `dkms autoinstall` successfully built/installed them for another installed kernel with matching headers. Exact host-kernel inventory is intentionally omitted. No later kernel upgrade has been tested.
 
 References: [Ubuntu 24.04 DKMS manual](https://manpages.ubuntu.com/manpages/noble/man8/dkms.8.html), [DKMS upstream manual](https://github.com/dkms-project/dkms/blob/main/dkms.8.in), and [Surface Pro 7 IPU4 discussion](https://github.com/linux-surface/linux-surface/discussions/1353). Recent community camera work is promising, but its build on an older kernel branch does not prove compatibility with the host's current Ubuntu HWE kernel.
 
@@ -32,8 +32,8 @@ References: [Ubuntu 24.04 DKMS manual](https://manpages.ubuntu.com/manpages/nobl
 2. **Confirm the target and build compatibility.** The current-running-kernel selection, matching headers, all IPU4P/kernel modules, `v4l2loopback`, patched libcamera, and GStreamer plugin passed build-only validation on 5 October 2026. No system files were deployed.
 3. **Package kernel modules for DKMS.** The installer prepares a versioned `/usr/src/surface7-ubuntu-frontcamera-0.1.0` source tree, builds nine out-of-tree modules through DKMS, and sets `AUTOINSTALL="yes"`. DKMS install and autoinstall were verified for two installed Ubuntu kernels.
 4. **Exercise automatic rebuild behavior.** Completed for another already-installed Ubuntu kernel with matching headers. Do not install a different kernel just to simulate this.
-5. **Prove rollback-safe deployment and capture.** A temporary GStreamer/libcamera capture produced viewable 1296 × 972 frames after loading the OV5693 IPA tuning. A temporary `v4l2loopback` reload with `max_buffers=4` then passed synthetic and real camera producer/consumer readback. The original two-buffer setting was restored; the new tuning and module option still need to be deployed through the installer with rollback coverage. The image has a green cast and clipped highlights, and no ordinary camera application or moving subject has been tested.
-6. **Repeat after deployment and reboot.** Validate the installed service, a separate V4L2 consumer, an ordinary camera application, and a moving subject. Confirm camera capture persists after reboot. Explain that DKMS compiles kernel modules for each new kernel while libcamera/GStreamer userspace normally remains installed; require a camera smoke test after kernel upgrades.
+5. **Prove rollback-safe deployment and capture.** The rollback-safe installer deployed the tuning file, four-buffer loopback config, and DKMS module source after the old project installation was rolled back. The service was started manually; a separate V4L2 consumer produced five PNG frames and a three-second GStreamer recording showed clear subject movement. Cheese and GStreamer device monitoring enumerated no camera, so ordinary-application discovery has not passed. The preview has a green/purple cast and low-light noise.
+6. **Repeat after deployment and reboot.** The deployed settings are active now, and DKMS also installed modules for a second already-installed kernel with matching headers. No reboot or kernel upgrade has been performed; delayed startup and persistence remain unverified. Explain that DKMS compiles kernel modules for each new kernel while libcamera/GStreamer userspace normally remains installed; require a camera smoke test after kernel upgrades. Before any approved reboot, broadcast a system-wide warning at least two minutes in advance and wait the full two minutes.
 
 ## Ventilation investigation (separate work)
 
