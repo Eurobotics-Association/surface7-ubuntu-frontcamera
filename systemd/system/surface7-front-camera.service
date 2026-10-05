@@ -11,5 +11,4 @@ Type=simple
 Environment=GST_PLUGIN_PATH=/usr/local/lib/surface7-ubuntu-frontcamera/gstreamer-1.0
 EnvironmentFile=/etc/default/surface7-front-camera
 ExecStart=/usr/local/libexec/surface7-front-camera
-Restart=on-failure
-RestartSec=5
+Restart=no
