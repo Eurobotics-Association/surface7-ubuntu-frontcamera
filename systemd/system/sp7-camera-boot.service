@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+[Unit]
+Description=Surface Pro 7 IPU4P camera initialization
+After=multi-user.target systemd-modules-load.service local-fs.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/sp7-camera-boot
+RemainAfterExit=yes
+TimeoutStartSec=60
