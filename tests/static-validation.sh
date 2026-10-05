@@ -17,20 +17,74 @@ python3 -Werror::SyntaxWarning -m py_compile "$ROOT/scripts/prepare-upstream-ins
 tmp="$(mktemp -d -t surface7-static-check.XXXXXXXX)"
 trap 'rm -rf "$tmp"' EXIT
 cp -a "$ROOT/upstream/surface-pro-7-camera" "$tmp/upstream"
+mkdir -p "$tmp/upstream/scripts" "$tmp/upstream/ubuntu-deployment"
+install -m 0644 "$ROOT/systemd/system/surface7-front-camera.service" \
+    "$tmp/upstream/ubuntu-deployment/surface7-front-camera.service"
+install -m 0644 "$ROOT/systemd/system/surface7-front-camera.timer" \
+    "$tmp/upstream/ubuntu-deployment/surface7-front-camera.timer"
+install -m 0644 "$ROOT/systemd/system/sp7-camera-boot.service" \
+    "$tmp/upstream/ubuntu-deployment/sp7-camera-boot.service"
+install -m 0644 "$ROOT/config/front-camera.env" \
+    "$tmp/upstream/ubuntu-deployment/front-camera.env"
+install -m 0755 "$ROOT/scripts/surface7-front-camera" \
+    "$tmp/upstream/ubuntu-deployment/surface7-front-camera"
+install -m 0755 "$ROOT/scripts/dkms-build-modules.sh" "$tmp/upstream/scripts/dkms-build-modules.sh"
+install -m 0755 "$ROOT/scripts/dkms-pre-install.sh" "$tmp/upstream/scripts/dkms-pre-install.sh"
+install -m 0644 "$ROOT/dkms/dkms.conf" "$tmp/upstream/dkms.conf"
 python3 "$ROOT/scripts/prepare-upstream-installer.py" "$tmp/upstream/install.sh"
 adapted="$tmp/upstream/install.sh"
 
-grep -Fq 'EXPECTED_KERNEL="6.19.8-surface-3"' "$adapted"
+grep -Fq 'EXPECTED_KERNEL="${SURFACE7_TARGET_KERNEL:-$(uname -r)}"' "$adapted"
 grep -Fq 'EXPECTED_UBUNTU="24.04"' "$adapted"
 grep -Fq 'sudo apt-get install -y "linux-headers-$KVER"' "$adapted"
 grep -Fq 'GSTREAMER_PLUGIN="/usr/local/lib/surface7-ubuntu-frontcamera/gstreamer-1.0/libgstlibcamera.so"' "$adapted"
 grep -Fq 'gst-inspect-1.0 libcamerasrc' "$adapted"
+grep -Fq 'DESTDIR="$STAGE" meson install' "$adapted"
+grep -Fq 'sudo cp -a "$staged_libdir/." /usr/local/lib/surface7-ubuntu-frontcamera/' "$adapted"
+if grep -Fq 'sudo meson install' "$adapted"; then
+    echo "Adapted deployment must stage libcamera before installing product-owned files." >&2
+    exit 1
+fi
 grep -Fq 'v4l2sink device="$DEVICE"' "$ROOT/scripts/surface7-front-camera"
 grep -Fq 'video_nr=83 card_label="Surface Pro 7 Front Camera" exclusive_caps=1' \
     "$tmp/upstream/config/modprobe.d/sp7-v4l2loopback.conf"
 grep -Fq 'sudo install -D -m 0755' "$adapted"
 grep -Fq 'record_unit_enablement_state surface7-front-camera.service' "$adapted"
 grep -Fq 'record_unit_enablement_state sp7-camera-boot.service' "$adapted"
+grep -Fq 'record_unit_enablement_state surface7-front-camera.timer' "$adapted"
+grep -Fq 'OnBootSec=60s' "$tmp/upstream/ubuntu-deployment/surface7-front-camera.timer"
+grep -Fq 'systemctl enable surface7-front-camera.timer' "$adapted"
+if grep -Fq 'systemctl enable surface7-front-camera.service' "$adapted"; then
+    echo "Front camera service must start via its delayed boot timer." >&2
+    exit 1
+fi
+grep -Fq 'sudo dkms add -m "$DKMS_PACKAGE" -v "$DKMS_VERSION"' "$adapted"
+grep -Fq 'sudo dkms build -m "$DKMS_PACKAGE" -v "$DKMS_VERSION" -k "$KVER"' "$adapted"
+grep -Fq 'sudo dkms install -m "$DKMS_PACKAGE" -v "$DKMS_VERSION" -k "$KVER"' "$adapted"
+grep -Fq 'sudo install -m 0644 "$ROOT/config/ownership-marker"' "$adapted"
+grep -Fq 'AUTOINSTALL="yes"' "$tmp/upstream/dkms.conf"
+grep -Fq 'PRE_INSTALL="scripts/dkms-pre-install.sh ${kernelver}"' "$tmp/upstream/dkms.conf"
+grep -Fq '/updates/dkms/intel-ipu4p.ko.zst' "$tmp/upstream/scripts/sp7-camera-boot"
+if grep -Fq 'Kein linux-surface-Kernel' "$tmp/upstream/scripts/sp7-camera-boot"; then
+    echo "Ubuntu boot loader still skips non-surface kernel names." >&2
+    exit 1
+fi
+grep -Fq 'BUILT_MODULE_NAME[8]="v4l2loopback"' "$tmp/upstream/dkms.conf"
+grep -Fq 'install -m 0644 "$KMOD_M/$module.ko" "$ROOT/$module.ko"' \
+    "$ROOT/scripts/dkms-build-modules.sh"
+grep -Fq 'dkms remove -m "$dkms_package" -v "$dkms_version" --all' \
+    "$ROOT/scripts/rollback.sh"
+grep -Fq 'unmarked DKMS source has a registered module' "$ROOT/scripts/rollback.sh"
+grep -Fq 'dkms_registration="/var/lib/dkms/${dkms_package}/${dkms_version}"' \
+    "$ROOT/scripts/rollback.sh"
+grep -Fq 'deployment-kernel' "$ROOT/scripts/install.sh"
+grep -Fq 'deployed_kernel="$(sudo cat "$deployment_kernel_marker")"' "$ROOT/scripts/rollback.sh"
+grep -Fq 'backup_once "/etc/systemd/system/$unit"' "$ROOT/scripts/deploy-services.sh"
+grep -Fq 'systemctl enable surface7-front-camera.timer' "$ROOT/scripts/deploy-services.sh"
+if grep -Fq 'systemctl disable --now' "$ROOT/scripts/deploy-services.sh"; then
+    echo "Service-only deployment must not stop currently running camera processes." >&2
+    exit 1
+fi
 
 if grep -Eiq 'pipewiresrc|pipewire\.service|wireplumber\.service|libspa-libcamera|systemctl --user' "$adapted"; then
     echo "Adapted deployment still contains a desktop camera bridge path." >&2
@@ -42,6 +96,7 @@ if grep -Eiq 'sudo dnf|kernel-surface-devel|rpm -' "$adapted"; then
 fi
 
 bash -n "$adapted"
+bash -n "$tmp/upstream/scripts/sp7-camera-boot"
 if cmp -s "$ROOT/upstream/surface-pro-7-camera/install.sh" "$adapted"; then
     echo "Adapter did not change the temporary installer." >&2
     exit 1
