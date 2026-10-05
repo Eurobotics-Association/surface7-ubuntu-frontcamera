@@ -6,6 +6,18 @@ This investigation targets Microsoft Surface Pro 7 (not 7+) with Ubuntu 24.04 x8
 
 No reboot was performed during these tests. The one-time `iommu=pt` diagnostic setting is active only for the current boot; its persistent GRUB entry was restored earlier. The user's thermal rule is to continue through 95°C and pause heavy work for 3 minutes only above 95°C. These tests stayed well below that threshold.
 
+## Browser and desktop application results — 5 October 2026
+
+The user compared four applications against the installed feed. WebcamTests.com displayed live video in both Brave and Opera; the supplied Opera screenshot reports the device name `Surface Pro 7 Front Camera`, RGB, 1280 × 720, and 29 FPS. This confirms that the active GStreamer-to-V4L2 feed is usable from two Chromium-based browsers.
+
+Firefox did not produce a usable preview. Its WebcamTests.com page showed a generic warning that the camera was in use or blocked, selected `videoinput#1`, and did not populate the camera information fields. This is a site-level message, not the exact Firefox WebRTC exception. The user also reports that Cheese currently finds no camera; that replaces the earlier one-time successful Cheese preview as the current result while preserving that earlier pass in the history. The test sequence does not establish whether the Brave or Opera stream had fully stopped before Firefox was tested, so exclusive-client contention still needs to be excluded.
+
+Read-only checks found the Firefox Snap `camera` interface connected and `/dev/video83` tagged for Firefox access. Earlier checks also showed the service holding `/dev/video42` and producing into `/dev/video83`; the white LED is expected because the producer continuously opens the physical sensor, whether or not an application is consuming the virtual device. It is not evidence that Firefox successfully opened the camera. No Firefox preference, Snap connection, PipeWire service, camera service, module, or host setting was changed during this follow-up.
+
+Mozilla Bugzilla [2007675](https://bugzilla.mozilla.org/show_bug.cgi?id=2007675) describes a similar Linux WebRTC report where Chromium finds a `v4l2loopback` device and Firefox does not; its reporter says the device appeared with `media.webrtc.camera.allow-pipewire` set to false. That issue was closed as a duplicate of [1946916](https://bugzilla.mozilla.org/show_bug.cgi?id=1946916), where a Mozilla engineer states Mozilla-distributed Firefox builds do not use PipeWire for cameras. The reports do not establish the cause on this Surface, and they should not be used to introduce the rejected PipeWire camera design.
+
+The next low-risk diagnostic is sequential: stop the active camera stream in each other browser, then test Firefox alone on Mozilla's [WebRTC getUserMedia test page](https://mozilla.github.io/webrtc-landing/gum_test.html), recording the actual error and selected device. Leave the continuous bridge running; its LED will remain on during this check. If Firefox still fails, inspect its effective camera backend preference and WebRTC log before changing any browser or host setting. Separately, continue Cheese diagnosis through GStreamer device discovery and the observed `video_output` metadata mismatch. Do not reboot or reload camera modules for these application-level checks.
+
 ## What changed from the earlier diagnosis
 
 Earlier raw-buffer attempts did not establish that image pixels were arriving. A later one-time `iommu=pt` boot allowed the product libcamera build to enumerate both sensors and removed the matching CSE/DMAR messages seen in earlier attempts. This is a useful correlation, not proof that IOMMU settings were the root cause.
