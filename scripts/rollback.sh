@@ -113,6 +113,7 @@ system_files=(
     /etc/systemd/system/sp7-camera-boot.service
     /etc/ld.so.conf.d/surface7-ubuntu-frontcamera.conf
     /usr/local/share/libcamera/ipa/simple/ov8865.yaml
+    /usr/local/share/libcamera/ipa/simple/ov5693.yaml
 )
 for path in "${system_files[@]}"; do restore_or_remove "$path"; done
 

@@ -372,7 +372,7 @@ sudo dkms status -m "$DKMS_PACKAGE" -v "$DKMS_VERSION"'''
     root = path.parent
     loopback_config = root / "config/modprobe.d/sp7-v4l2loopback.conf"
     loopback_config.write_text(
-        'options v4l2loopback video_nr=83 card_label="Surface Pro 7 Front Camera" exclusive_caps=1' + NL,
+        'options v4l2loopback video_nr=83 card_label="Surface Pro 7 Front Camera" exclusive_caps=1 max_buffers=4' + NL,
         encoding="utf-8",
     )
 
@@ -431,6 +431,10 @@ install_system_file \
     "$ROOT/ubuntu-deployment/front-camera.env" \
     /etc/default/surface7-front-camera \
     0644
+backup_system_file /usr/local/share/libcamera/ipa/simple/ov5693.yaml
+sudo install -D -m 0644 \
+    "$ROOT/ubuntu-deployment/ov5693.yaml" \
+    /usr/local/share/libcamera/ipa/simple/ov5693.yaml
 record_unit_enablement_state surface7-front-camera.service
 record_unit_enablement_state sp7-camera-boot.service
 record_unit_enablement_state surface7-front-camera.timer

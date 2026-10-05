@@ -2,7 +2,7 @@
 
 Research reviewed before deployment planning, 4 October 2026.
 
-Updated 5 October 2026 after the host target was corrected: the target is the latest Ubuntu HWE kernel installed on the Surface, with matching headers. The legacy `6.19.8-surface-3` target is not the user's requested target and has been removed. This public repository omits exact host-kernel inventory.
+Updated 5 October 2026 after the host target was corrected: the target is the latest Ubuntu HWE kernel installed on the Surface, with matching headers. The obsolete custom-kernel target from early experiments is not the requested target and has been removed. This public repository omits exact host-kernel inventory.
 
 ## Hardware and capture path
 
@@ -13,7 +13,7 @@ The newer [ConsultingFuture4200/sp7-camera work](https://github.com/ConsultingFu
 
 The [official libcamera GStreamer documentation](https://docs.libcamera.org/master/getting-started.html) documents libcamerasrc as an optional GStreamer source plugin. The Ubuntu deployment uses APT packages for the build environment and builds the camera libraries from pinned source.
 
-These reports establish plausible Surface 7 implementations, not a validated Ubuntu result. The GStreamer approach remains the selected path; PipeWire camera integration is out of scope. The Ubuntu-specific package and service configuration still requires local moving-frame tests.
+These reports establish plausible Surface 7 implementations, not a validated Ubuntu result. The GStreamer approach remains the selected path; PipeWire camera integration is out of scope. The Ubuntu host has now produced viewable front-camera frames and V4L2 loopback readback under temporary settings. Persistent service and ordinary-application validation remain.
 
 ## Earlier Zorin OS report
 
@@ -25,13 +25,13 @@ The complete Eurobotics-Association/surface5-frontcamera repository was read bef
 
 ## Ubuntu adaptation
 
-The Surface 7 source release's installer targets a different Linux distribution, package manager, and kernel release. The local adapter uses Ubuntu APT, selects the running Ubuntu HWE kernel with matching headers, stages userspace output in a project-specific library directory, and registers kernel modules through DKMS. DKMS installation and a build for another installed Ubuntu kernel succeeded. The adapter changes only a temporary copy; the vendor snapshot remains unchanged. The installed driver source already includes equivalents of the newer frame-size enumeration and SP7 front timing fixes. Earlier live attempts showed IPU firmware-authentication errors. A later one-time `iommu=pt` diagnostic boot enumerated both cameras and yielded raw GStreamer buffers without matching CSE/DMAR errors during that test, but pixel data was saturated or zero. This correlation does not establish a root cause or a working stream. The temporary GRUB entry was removed after the trial.
+The Surface 7 source release's installer targets a different Linux distribution, package manager, and kernel release. The local adapter uses Ubuntu APT, selects the running Ubuntu HWE kernel with matching headers, stages userspace output in a project-specific library directory, and registers kernel modules through DKMS. DKMS installation and a build for another installed Ubuntu kernel succeeded. The adapter changes only a temporary copy; the vendor snapshot remains unchanged. The installed driver source already includes equivalents of the newer frame-size enumeration and SP7 front timing fixes. Earlier live attempts showed IPU firmware-authentication errors. A later one-time `iommu=pt` diagnostic boot enumerated both cameras. With the OV5693 simple-IPA tuning supplied temporarily, GStreamer/libcamera produced viewable RGB frames. V4L2 readback from `/dev/video83` also succeeded while `v4l2loopback` was temporarily loaded with four buffers. These results establish a working capture path under temporary conditions, not a root cause for earlier CSE/DMAR messages or persistent deployment.
 
 The pinned IPU4P commit (`georgemihaila/sp7-ipu4-camera@aa0043f3649c3bff9247d5f99de5d164c3cdcc75`) handles the Surface Pro 7's signed 20191030 CPD firmware versus 20181222 CSS library pairing with a DMI- and device-specific exception in `ipu-cpd.c`. Unlike the newer working reference's driver, this pinned source does not expose `fw_version_check`; carrying that parameter in its modprobe config only produces an ignored-option warning. The Ubuntu adaptation removes it from the temporary deployment copy and preserves the scoped source check. The observed CSE boot-load failure remains a separate unresolved runtime issue.
 
 ## Current-kernel compatibility
 
-The target is Ubuntu 24.04 x86_64 with the latest installed Ubuntu HWE kernel. The [Surface 7 reference's working report](https://github.com/ConsultingFuture4200/sp7-camera/blob/main/docs/both-cameras-working.md) is validated on Arch/Linux 6.19.8 and says its patches do not apply directly to newer kernels. This project's DKMS modules build and load on the target Ubuntu kernel. In one temporary `iommu=pt` boot, libcamera enumerated both cameras and GStreamer negotiated a front Bayer stream, but captured buffers did not contain usable image data. A successful build, media-node enumeration, camera enumeration, negotiated caps, or buffer arrival alone does not establish runtime compatibility. The approved next step is a bounded direct-libcamera capture with buffer-layout and control metadata recorded; see [the investigation log](front-camera-investigation-2026-10-05.md).
+The target is Ubuntu 24.04 x86_64 with the latest installed Ubuntu HWE kernel. The [Surface 7 reference's working report](https://github.com/ConsultingFuture4200/sp7-camera/blob/main/docs/both-cameras-working.md) is validated on Arch/Linux 6.19.8 and says its patches do not apply directly to newer kernels. This project's DKMS modules build and load on the target Ubuntu kernel. The target has produced a bounded 1296 × 972 GStreamer/libcamera image and a 1280 × 720 V4L2 loopback readback when the OV5693 IPA tuning file is supplied and the loopback buffer limit is raised to four. The installed configuration has not yet been updated to those settings. A 2560 × 1600 source mode did not produce readback during a bounded test. Application access, a moving-subject test, image color, persistence, and the next kernel-upgrade check remain outstanding; see [the investigation log](front-camera-investigation-2026-10-05.md).
 
 ## DKMS assessment
 

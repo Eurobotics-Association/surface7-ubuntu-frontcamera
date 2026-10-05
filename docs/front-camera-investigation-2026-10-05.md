@@ -1,35 +1,57 @@
 # Surface Pro 7 front-camera investigation log — 5 October 2026
 
-## Target and constraints
+## Scope and safety
 
-This investigation targets Microsoft Surface Pro 7 (not 7+) with Ubuntu 24.04 x86_64 and the latest installed Ubuntu HWE kernel. The selected capture design remains GStreamer with libcamera's `libcamerasrc`; PipeWire camera integration is out of scope. Exact host-kernel inventory and private image files are intentionally omitted from this public log. Camera support remains experimental until moving, non-black frames are verified in an application.
+This investigation targets Microsoft Surface Pro 7 (not 7+) with Ubuntu 24.04 x86_64 and the latest installed Ubuntu HWE kernel. The selected camera path is GStreamer with libcamera's `libcamerasrc`; PipeWire camera integration is out of scope. Exact host-kernel inventory and private image files are intentionally omitted. Surface 5 files were not changed.
 
-## What the latest diagnostic established
+No reboot was performed during these tests. The one-time `iommu=pt` diagnostic setting is active only for the current boot; its persistent GRUB entry was restored earlier. The user's thermal rule is to continue through 95°C and pause heavy work for 3 minutes only above 95°C. These tests stayed well below that threshold.
 
-Earlier attempts on the deployed Ubuntu kernel showed IPU4 CSE firmware-authentication/DMAR errors and failed to enumerate the front camera. On 5 October, a one-time boot with `iommu=pt` changed the observed startup path:
+## What changed from the earlier diagnosis
 
-- The front and rear cameras were enumerated by the product-specific libcamera 0.7.2 build.
-- The relevant test boot logged CSE authentication completion and did not reproduce the earlier matching CSE boot-load, magic-number timeout, or DMAR DMA-read messages.
-- A camera-name quoting error in the service configuration was identified: the direct test must preserve the leading backslash in the ACPI camera ID. With the corrected argument, GStreamer reached `PLAYING` and negotiated a front-camera Bayer stream (`bggr10le`, 1296 × 972 at 30 fps).
-- A bounded GStreamer capture wrote raw buffers. The auto-exposure test set `ae-enable=true`, but the effective control value was not verified. Each saved buffer was 2,553,152 bytes.
-- Interpreting the saved buffer as little-endian 16-bit words, frame 00 contained only 0 and 1023 values (1,312 zeros and 1,275,264 values at 1023); frame 01 contained only zero values. The row stride/padding has not been established, so these counts are preliminary buffer-level evidence. Neither file yielded a verified, viewable image.
-- The privacy LED blinked during the explicit capture. On the user's alert, the producer was stopped, GStreamer capture processes were terminated, and the timer was disabled. A follow-up status check found no process holding the camera device nodes. The user later confirmed the LED had stopped blinking.
+Earlier raw-buffer attempts did not establish that image pixels were arriving. A later one-time `iommu=pt` boot allowed the product libcamera build to enumerate both sensors and removed the matching CSE/DMAR messages seen in earlier attempts. This is a useful correlation, not proof that IOMMU settings were the root cause.
 
-The result is **camera initialization and buffer arrival, but no demonstrated image flow**. `PLAYING`, an LED blink, camera enumeration, or a raw file is not proof of a working camera. The `iommu=pt` correlation is promising but does not prove that IOMMU configuration was the root cause or that it fixed DMA. It remains active for the current boot only; the persistent GRUB custom entry was restored, and the next normal reboot clears the setting. Do not repeat the boot-parameter experiment without a separate reason and approval.
+The earlier bounded raw capture had negotiated `bggr10le` at 1296 × 972 and wrote 2,553,152-byte buffers. Preliminary word counts showed frame 00 contained mostly 0 and 1023 values and frame 01 contained only zeros; the row stride and active-pixel layout had not been established. Those raw files were not viewable images. The privacy LED blinking during camera startup was also not treated as image evidence. A camera-name quoting bug in the installed service was separately found: sourcing the old environment value left only one backslash, which GStreamer parsed away. The corrected service configuration now retains two backslashes until GStreamer parses the camera ID.
 
-## Approved next diagnostic
+The first RGB capture then exposed a missing dependency in the userspace camera path: the installed libcamera data had no OV5693 tuning file. The logs said `ov5693.yaml` was missing, the simple IPA failed to initialize, and Software ISP disabled software debayering. The only installed simple tuning file was for OV8865.
 
-Robert approved a bounded direct-libcamera capture to determine whether meaningful sensor frames reach libcamera before GStreamer handles them. This is the next camera test; it has not yet been run.
+The Ubuntu package's generic `/usr/bin/cam` is libcamera 0.2.0 and listed no cameras. It is not the product's libcamera 0.7.2 build and was not used as evidence against the working product build.
 
-1. Keep the camera service stopped and timer disabled until the controlled test is ready. Do not reboot or reload camera modules for this capture.
-2. Read the installed product-specific libcamera capture tool's help first. Use the direct libcamera tool (for example, `cam` if the installed build supports bounded capture) so GStreamer and V4L2 loopback are not in the capture path. Limit the capture to a few frames and stop it explicitly afterward.
-3. Record the camera ID, negotiated pixel format and dimensions, plane count, active row bytes, stride, bytes used, frame sequence and timestamp, requested and effective exposure/gain/AE controls, and per-frame pixel statistics after excluding row padding. Preserve relevant kernel logs around that single capture, especially CSE, DMA, and IOMMU messages.
-4. Keep any captured image private on the host. Do not upload raw user imagery to this public repository; document only technical metadata and the pass/fail result.
+## OV5693 tuning provenance
 
-## How to interpret that test
+The missing tuning file was obtained from [ConsultingFuture4200/sp7-camera](https://github.com/ConsultingFuture4200/sp7-camera/blob/9bb8ec8bed3ca02c774ef211332fcc8259232b90/ipa/simple/ov5693.yaml), commit `9bb8ec8bed3ca02c774ef211332fcc8259232b90`, Git blob `6c8e130ae23cb5428d3c71ea5b88d6f80a43b5b3`. It is marked CC0-1.0. Its SHA-256 is `73845d5ebaedc948ec0cca7b3d2f07ac8081c2f5c3e16c63905ce04532ba21ac`.
 
-- **Direct libcamera produces valid, changing pixels:** the sensor/driver path is delivering frames. Diagnose the GStreamer caps, allocator/buffer layout, Bayer conversion, and V4L2 loopback path next.
-- **Direct libcamera produces flat or invalid data after the buffer layout is verified:** investigate sensor mode/timing and exposure controls, IPU4P/CSE firmware initialization, and DMA/IOMMU behavior. Compare against the Surface 7 references and audit any kernel changes for the target Ubuntu HWE kernel before deploying them.
-- **The buffer layout or controls cannot be verified:** stop short of attributing the failure to the sensor or GStreamer. First establish the actual format, stride, and whether the requested camera controls reached the device.
+For the live tests, the file was kept under `/tmp` and selected with `LIBCAMERA_SIMPLE_TUNING_FILE`. Libcamera logged that it loaded this file; the simple IPA and software ISP then initialized. This proves the tuning file is needed for the demonstrated RGB path. It does not mean the file had already been installed persistently on the host.
 
-Do not retest a branch already ruled out by a recorded result. After valid direct frames, return to the approved GStreamer bridge and require moving, non-black frames from `/dev/video83`, application access, and a later kernel-upgrade check before calling the camera supported.
+## Captured frames
+
+With the temporary tuning override, a bounded GStreamer capture negotiated front-camera output at 1296 × 972. The software ISP reported 2592 × 1944 BGGR10 input with stride 5184. It wrote viewable 8-bit RGB PNGs. A longer bounded run delivered 90 buffers over about 8.9 seconds and ended with EOS; live autofocus diagnostics advanced during the stream.
+
+The pictures show the room and window, so the camera produced actual scene pixels. They have a pronounced green cast and the bright window is clipped. Automatic white balance/color quality still needs work. The scene was not deliberately moved during the capture, so this is not the final moving-subject acceptance test. The private images remain on the host and were not uploaded to GitHub.
+
+## V4L2 loopback test and buffer finding
+
+The first camera-to-loopback attempt used 2560 × 1600 and stopped with GStreamer error `-5`. A separate synthetic `videotestsrc` producer failed the same way, isolating the immediate failure from the camera sensor. GStreamer V4L2 diagnostics showed the sink requesting at least three buffers, then failing to allocate another buffer. The active `v4l2loopback` module allowed only two (`max_buffers=2`).
+
+The loopback uses `exclusive_caps=1`. Before a producer is streaming it advertises output capability only; a capture application can open it after the producer starts. That explains why an early reader saw “not a capture device” while the producer was failing. GStreamer `io-mode=rw` kept the node output-only and did not solve the capture handoff.
+
+A temporary reload of only `v4l2loopback` with `max_buffers=4` fixed the buffer shortage in a synthetic producer/consumer check. With the same temporary setting, a GStreamer/libcamera pipeline at 1296 × 972 fed YUY2 1280 × 720 into `/dev/video83`; a separate `v4l2src` consumer read it back and wrote PNG frames. Both producer and consumer completed cleanly. This establishes camera-to-V4L2-loopback readback under the temporary four-buffer setting.
+
+The module was then restored to its original `max_buffers=2` configuration. The final check found `/dev/video83` present, no process holding it, and no camera producer running. The camera service remains failed/stopped and its timer remains disabled. No persistent host configuration was changed during these tests.
+
+A follow-up attempt using the former 2560 × 1600 source mode negotiated caps but did not switch the loopback to capture capability within the bounded startup window, so no readback frame was obtained. That resolution remains unverified. The repository now defaults to the tested 1296 × 972 mode; this updated configuration has not yet been deployed to the host.
+
+## Current interpretation
+
+The target's front camera can now produce visible frames through libcamera's Software ISP, and GStreamer can deliver those frames through `/dev/video83` when the OV5693 tuning data is present and the loopback buffer limit is four. The remaining deployment gap is to make those two required settings part of the rollback-safe installer and then validate the installed service.
+
+Do not repeat the earlier raw-buffer or single-frame `-5` experiments as if they were unresolved sensor failures. The evidence now points to a missing IPA tuning file for RGB conversion and a separate V4L2 loopback buffer limit. Keep support marked experimental: persistent deployment, deliberate moving-subject capture, an ordinary video application's access, improved color, and a later kernel-upgrade check remain outstanding.
+
+## Next steps
+
+1. Install the pinned CC0 OV5693 tuning file through the product installer and include it in rollback.
+2. Set the loopback module's persistent `max_buffers=4` option in the existing product-specific modprobe configuration; retain `exclusive_caps=1`.
+3. Preserve the tested 1296 × 972 source mode and correct the camera-name escaping in the service environment file.
+4. Re-establish the elevated `surf7cam-test` tmux before host deployment. Test the deployed configuration and service with a separate V4L2 consumer; then test a deliberately moving subject and an ordinary video application.
+5. Diagnose the green cast and clipped highlights before calling the camera supported.
+
+Do not reboot for these checks. If a later step requires reboot, broadcast a global warning at least 2 minutes beforehand and wait the full 2 minutes.

@@ -9,6 +9,12 @@ actual_sha="$(sha256sum "$ROOT/upstream/surface-pro-7-camera/install.sh" | awk '
     echo "Pinned upstream installer digest mismatch." >&2
     exit 1
 }
+EXPECTED_OV5693_TUNING_SHA=73845d5ebaedc948ec0cca7b3d2f07ac8081c2f5c3e16c63905ce04532ba21ac
+actual_tuning_sha="$(sha256sum "$ROOT/config/ipa/simple/ov5693.yaml" | awk '{print $1}')"
+[[ "$actual_tuning_sha" == "$EXPECTED_OV5693_TUNING_SHA" ]] || {
+    echo "Pinned OV5693 tuning digest mismatch." >&2
+    exit 1
+}
 
 while IFS= read -r -d '' file; do bash -n "$file"; done < <(find "$ROOT/scripts" -type f -name '*.sh' -print0)
 bash -n "$ROOT/tests/static-validation.sh"
@@ -27,6 +33,8 @@ install -m 0644 "$ROOT/systemd/system/sp7-camera-boot.service" \
     "$tmp/upstream/ubuntu-deployment/sp7-camera-boot.service"
 install -m 0644 "$ROOT/config/front-camera.env" \
     "$tmp/upstream/ubuntu-deployment/front-camera.env"
+install -m 0644 "$ROOT/config/ipa/simple/ov5693.yaml" \
+    "$tmp/upstream/ubuntu-deployment/ov5693.yaml"
 install -m 0755 "$ROOT/scripts/surface7-front-camera" \
     "$tmp/upstream/ubuntu-deployment/surface7-front-camera"
 install -m 0755 "$ROOT/scripts/dkms-build-modules.sh" "$tmp/upstream/scripts/dkms-build-modules.sh"
@@ -57,8 +65,15 @@ if grep -Fq 'sudo meson install' "$adapted"; then
     exit 1
 fi
 grep -Fq 'v4l2sink device="$DEVICE"' "$ROOT/scripts/surface7-front-camera"
-grep -Fq 'video_nr=83 card_label="Surface Pro 7 Front Camera" exclusive_caps=1' \
+grep -Fq 'CAMERA_NAME="\\\\_SB_.PCI0.I2C2.CAMF"' "$ROOT/config/front-camera.env"
+grep -Fq 'SOURCE_WIDTH=1296' "$ROOT/config/front-camera.env"
+grep -Fq 'SOURCE_HEIGHT=972' "$ROOT/config/front-camera.env"
+grep -Fq 'video_nr=83 card_label="Surface Pro 7 Front Camera" exclusive_caps=1 max_buffers=4' \
     "$tmp/upstream/config/modprobe.d/sp7-v4l2loopback.conf"
+grep -Fq 'backup_system_file /usr/local/share/libcamera/ipa/simple/ov5693.yaml' "$adapted"
+grep -Fq '/usr/local/share/libcamera/ipa/simple/ov5693.yaml' "$adapted"
+grep -Fq '/usr/local/share/libcamera/ipa/simple/ov5693.yaml' "$ROOT/scripts/rollback.sh"
+grep -Fq 'SPDX-License-Identifier: CC0-1.0' "$tmp/upstream/ubuntu-deployment/ov5693.yaml"
 grep -Fq 'sudo install -D -m 0755' "$adapted"
 grep -Fq 'record_unit_enablement_state surface7-front-camera.service' "$adapted"
 grep -Fq 'record_unit_enablement_state sp7-camera-boot.service' "$adapted"

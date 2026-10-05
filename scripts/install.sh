@@ -71,6 +71,7 @@ install -m 0644 "$ROOT/systemd/system/surface7-front-camera.service" "$upstream/
 install -m 0644 "$ROOT/systemd/system/surface7-front-camera.timer" "$upstream/ubuntu-deployment/surface7-front-camera.timer"
 install -m 0644 "$ROOT/systemd/system/sp7-camera-boot.service" "$upstream/ubuntu-deployment/sp7-camera-boot.service"
 install -m 0644 "$ROOT/config/front-camera.env" "$upstream/ubuntu-deployment/front-camera.env"
+install -m 0644 "$ROOT/config/ipa/simple/ov5693.yaml" "$upstream/ubuntu-deployment/ov5693.yaml"
 install -D -m 0755 "$ROOT/scripts/dkms-build-modules.sh" "$upstream/scripts/dkms-build-modules.sh"
 install -D -m 0755 "$ROOT/scripts/dkms-pre-install.sh" "$upstream/scripts/dkms-pre-install.sh"
 install -D -m 0644 "$ROOT/dkms/dkms.conf" "$upstream/dkms.conf"

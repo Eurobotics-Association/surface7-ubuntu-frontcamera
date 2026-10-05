@@ -1,10 +1,10 @@
 # Surface Pro 7 front camera on Ubuntu
 
-This repository adapts the Surface Pro 7 IPU4P camera stack for Ubuntu 24.04 and a GStreamer capture service for the front RGB camera. The camera path is experimental and has not passed live-frame acceptance on this Ubuntu installation.
+This repository adapts the Surface Pro 7 IPU4P camera stack for Ubuntu 24.04 and a GStreamer capture service for the front RGB camera. The GStreamer path has produced viewable frames and V4L2 loopback readback under temporary settings. Persistent deployment, ordinary-app access, moving-subject validation, and color tuning remain; support is experimental.
 
 ## Current target and status
 
-The host is running Ubuntu's latest installed HWE generic kernel; the out-of-tree camera modules are registered with DKMS and installed for the current and a second installed Ubuntu kernel. In a one-time `iommu=pt` diagnostic boot, libcamera enumerated both cameras and GStreamer negotiated front-camera Bayer buffers, but the saved auto-exposure buffers contained only saturated or zero values. No viewable or moving frame has been verified, and the IOMMU setting is not a proven fix. It remains active only for the current boot; the persistent GRUB entry was restored, so the next normal reboot clears it. Camera support remains experimental. See the [DKMS and kernel plan](docs/dkms-plan.md), [test record](docs/testing.md), and [dated investigation log](docs/front-camera-investigation-2026-10-05.md).
+The host is running Ubuntu's latest installed HWE generic kernel; the out-of-tree camera modules are registered with DKMS and installed for the current and a second installed Ubuntu kernel. The front OV5693 produced visible frames at 1296 × 972 with the matching simple-IPA tuning file. A temporary four-buffer loopback reload also allowed separate GStreamer readback from `/dev/video83` at 1280 × 720. The host was restored to its original two-buffer setting after testing; the tuning file and four-buffer option still need rollback-safe deployment. The image currently has a strong green cast and clipped highlights. The one-time `iommu=pt` diagnostic setting is not a proven fix and remains active only for the current boot. See the [DKMS and kernel plan](docs/dkms-plan.md), [test record](docs/testing.md), and [dated investigation log](docs/front-camera-investigation-2026-10-05.md).
 
 ## Camera path
 
@@ -40,7 +40,7 @@ curl -fsSL https://raw.githubusercontent.com/Eurobotics-Association/surface7-ubu
 
 This downloads the installer from `main`, checks/installs required Ubuntu packages, builds for the running Ubuntu kernel, and deploys the experimental camera stack. It asks for sudo when needed. Review the script and repository first; do not use this command to upgrade an existing deployment without first following the rollback instructions.
 
-The current deployed stack is still under live validation. Do not treat a successful DKMS build, loaded modules, or `/dev/media0` alone as proof that the camera works. A pass requires moving, non-black frames from `/dev/video83`.
+The deployed stack is still under validation. Do not treat a successful DKMS build, loaded modules, or `/dev/media0` alone as proof that the camera works. Acceptance requires moving, non-black frames from `/dev/video83`, ordinary video-application access, and persistence after reboot and a later kernel update.
 
 ## Rollback
 

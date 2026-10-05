@@ -10,7 +10,7 @@
 ## Platform and camera design
 
 - Target Microsoft Surface Pro 7 (not 7+) on Ubuntu 24.04 x86_64 and the latest installed Ubuntu HWE kernel. Verify the running kernel and matching headers before each build; do not publish host-specific kernel inventory in this public repository.
-- `6.19.8-surface-3` is legacy for this host and has been removed. Do not deploy against it or make it the project target.
+- The obsolete custom kernel used in early experiments is legacy for this host and has been removed. Do not deploy against it or make it the project target.
 - Robert approved the kernel/DKMS plan on 5 October 2026. Installer and DKMS changes may proceed, but deployment remains experimental until rollback coverage and live moving-frame tests pass.
 - Use Ubuntu packages through apt only. Do not use Fedora package managers, RPM packages, or Fedora-specific system paths.
 - Camera capture must use GStreamer with libcamera's libcamerasrc into the V4L2 compatibility device.
