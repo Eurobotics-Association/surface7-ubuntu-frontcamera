@@ -96,3 +96,33 @@ The output image remained under `/tmp` on the host and was not uploaded. The fra
 The user reports that Cheese currently sees no camera. This supersedes the earlier single Cheese preview as the current acceptance state: the earlier preview proves that an app preview succeeded once, but Cheese discovery/capture is intermittent or state-dependent and is not considered resolved. Keep the distinct results separate: the producer is active, V4L2 readback works, GStreamer read/write capture works, default GStreamer device discovery does not expose the node, and current Cheese enumeration fails. Do not describe Cheese integration as consistently passing.
 
 Next, investigate the provider-hide behavior and device-capability mismatch without changing PipeWire, reloading the IPU stack, or rebooting. Test candidate GStreamer/provider workarounds against device enumeration first, then run Cheese only when the user is available to observe the desktop. Preserve the active producer meanwhile. A future no-idle-LED design must start the producer only when a consumer needs the virtual camera and must keep first-frame latency acceptable; continuous service is the current tradeoff.
+
+## Browser capture confirmation and next acceptance plan — 5 October 2026
+
+The user tested `https://webcamtests.com/` and reported that it successfully opened `Surface Pro 7 Front Camera`. The complete result they provided is recorded below. These are website-reported values, not independently instrumented frame timing or image analysis. The result is strong evidence that a browser can discover and consume the current loopback stream. It does not prove Cheese works or that the bridge stops when unused.
+
+| WebcamTests.com field | User-reported result |
+| --- | --- |
+| Webcam name | Surface Pro 7 Front Camera |
+| Quality rating | 3792 |
+| Built-in microphone / speaker | None / None |
+| Frame rate | 29 FPS |
+| Stream type / image mode | Video / RGB |
+| Resolution / megapixels | 1280 × 720 / 0.92 MP |
+| Video standard / aspect ratio | HD / 1.78 |
+| PNG / JPEG file size | 1.69 MB / 1000.14 kB |
+| Bitrate shown by site | 28.23 MB/s |
+| Number of colors | 271107 |
+| Average RGB color | Blank in the supplied result |
+| Lightness / luminosity / brightness | 24.51% / 26.58% / 25.23% |
+| Hue / saturation | 47° / 15.20% |
+
+### Cheese acceptance
+
+Do not treat the browser result as a Cheese test. Preserve three separate gates: default GStreamer device monitoring must expose the loopback as a capture source; a bounded `v4l2src` test using the mode Cheese selects must read frames; and Cheese itself must show live frames after selecting `Surface Pro 7 Front Camera`. Current evidence fails the first gate by default and fails the observed default-MMAP read, while explicit GStreamer read/write and the browser succeed. Investigate the local libcamera provider's V4L2-provider hiding and the `video_output` metadata discrepancy first. Any provider change must avoid making raw IPU subdevice nodes the default webcam. Then test Cheese in the user's desktop session; do not infer success from device enumeration alone.
+
+### Idle LED acceptance
+
+The LED cannot turn off while the current always-on `libcamerasrc` bridge is streaming from the sensor. A simple timer that stops the producer would likely make this `exclusive_caps=1` loopback advertise output-only and disappear from ordinary webcam discovery, so it could break Cheese and browser startup. The [upstream v4l2loopback documentation](https://github.com/v4l2loopback/v4l2loopback/blob/main/README.md#options) describes this output-only-before-producer / capture-only-after-producer behavior. The proposed reversible design is therefore conditional: first prove that `/dev/video83` can remain discoverable as a capture device with no sensor producer, possibly using its per-device format-retention controls; then add a small controller that starts the producer when a capture client begins streaming and stops it after a short idle grace period. Test first-client latency, reconnects, competing clients, suspend/resume, and rollback. Do not change `exclusive_caps`, unload/reload the module, or stop the current service until a reversible design and test window are ready.
+
+No reboot is needed for either the successful browser test or the pending Cheese discovery work. A later reboot is a separate test of the already-enabled delayed boot timer, requiring the system-wide warning and full two-minute wait in `AGENTS.md`.
