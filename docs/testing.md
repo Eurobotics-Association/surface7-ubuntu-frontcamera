@@ -10,6 +10,21 @@ The DKMS modules are installed for the running Ubuntu kernel and were then built
 
 The user subsequently tested the virtual camera at WebcamTests.com. Their page reported `Surface Pro 7 Front Camera`, RGB, 1280 × 720 (0.92 MP), and 29 FPS, with no built-in microphone or speaker. This is user-reported browser validation of the active stream; it does not prove Cheese discovery or idle power behavior. The listed 24.51% lightness, 26.58% luminosity, and 25.23% brightness are consistent with the low-light room described above. The site's quality score and file/bitrate estimates are retained as its reported output, not as independent measurements.
 
+
+
+The user has since compared applications on WebcamTests.com. Brave and Opera both displayed live front-camera video; the supplied Opera screenshot reports `Surface Pro 7 Front Camera`, RGB, 1280 × 720, and 29 FPS. Firefox did not start the camera and displayed the site's generic message that the webcam was in use or blocked; its selector showed `videoinput#1`, and no camera information or usable preview was produced. The page did not expose the underlying WebRTC error, so “busy” is the site's wording rather than a confirmed `NotReadableError`. The user reports that Cheese does not find a camera, superseding the earlier single successful preview as current status. The user did not report whether every other browser camera stream was stopped before the Firefox attempt; a single-client test remains necessary to rule out contention.
+
+| Application | Result reported by user | What the evidence establishes |
+| --- | --- | --- |
+| Brave | Pass; live image and browser test stats were reported earlier | The loopback feed can work through a Chromium-based browser. |
+| Opera | Pass; screenshot shows live image, 29 FPS, 1280 × 720 RGB | The feed also works through a second Chromium-based browser. |
+| Firefox | Fail; generic in-use/blocked page message, no successful frame | Firefox compatibility or client contention remains unresolved; exact WebRTC error is unknown. |
+| Cheese | Fail currently; user reports no camera | Cheese discovery/opening is unresolved despite one earlier preview. |
+
+Read-only checks found Firefox's Snap `camera` interface connected and `/dev/video83` tagged for Firefox access. These make a missing basic Snap camera grant less likely, but do not rule out Firefox's own site permission, device selection, or WebRTC backend behavior. The continuous GStreamer service keeps the physical sensor open and feeds `/dev/video83`; its white privacy LED therefore remains on even when Firefox and Cheese fail. LED state does not identify which applications are reading the loopback.
+
+Mozilla Bugzilla [2007675](https://bugzilla.mozilla.org/show_bug.cgi?id=2007675) documents a similar report: Chromium found a `v4l2loopback` camera while Firefox WebRTC did not. The reporter observed that disabling Firefox's `media.webrtc.camera.allow-pipewire` preference made the device appear, but the issue was closed as a duplicate of [1946916](https://bugzilla.mozilla.org/show_bug.cgi?id=1946916), whose discussion says Mozilla-distributed Firefox builds do not use PipeWire for camera capture. Treat this as an upstream lead, not a diagnosis or a reason to add a PipeWire camera path. No Firefox preferences, PipeWire services, or host settings were changed for this investigation.
+
 The temporary `iommu=pt` boot correlated with successful camera enumeration and frame delivery, but it is not proven to be the root cause. It remains active only for the current boot; the persistent GRUB custom entry was restored.
 
 ## Test history
@@ -38,6 +53,6 @@ The temporary `iommu=pt` boot correlated with successful camera enumeration and 
 
 The repository installer now deploys the pinned OV5693 tuning file, sets `max_buffers=4`, preserves the tested 1296 × 972 source mode, and corrects camera-name escaping. The host deployment completed after a successful rollback. The manually started service now delivers moving frames through `/dev/video83`.
 
-Still needed: resolve GStreamer device-provider hiding/capability metadata and default-MMAP buffer allocation so Cheese can reliably enumerate and open the camera; assess image quality under normal room lighting; design an on-demand producer if the user wants the LED off while idle; verify the delayed service after an approved reboot; and test a later Ubuntu kernel installation. No reboot has been performed in this test sequence. Do not retry the earlier raw-buffer path as the next diagnostic; moving pixels and V4L2 read/write loopback readback are proven with the installed settings.
+Still needed: first retest Firefox with every other browser camera stream stopped, then use Mozilla's WebRTC test page to capture the exact Firefox error and selected camera; resolve GStreamer device-provider hiding/capability metadata and default-MMAP buffer allocation so Cheese can reliably enumerate and open the camera; assess image quality under normal room lighting; design an on-demand producer if the user wants the LED off while idle; verify the delayed service after an approved reboot; and test a later Ubuntu kernel installation. No reboot has been performed in this test sequence. Do not retry the earlier raw-buffer path as the next diagnostic; moving pixels and V4L2 read/write loopback readback are proven with the installed settings.
 
 Moving non-black frames from `/dev/video83` are verified. Ordinary application access succeeded once in Cheese but currently fails to enumerate reliably, so it remains open acceptance work. Acceptance also requires persistence after reboot/kernel update and acceptable image quality. Build success, camera enumeration, an LED, or negotiated caps alone are not acceptance.
