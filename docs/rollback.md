@@ -1,12 +1,12 @@
 # Rollback
 
-The installer copies a self-contained rollback helper and its two configuration files into the product-owned directory before deployment starts. Run it as the desktop user; it will ask sudo when needed:
+Installations made from this revision copy a self-contained rollback helper and its two configuration files into the product-owned directory before deployment starts. Run it as the desktop user; it will ask sudo when needed:
 
 ~~~sh
 /usr/local/lib/surface7-ubuntu-frontcamera/scripts/rollback.sh
 ~~~
 
-This persistent path works after the one-line GitHub installer removes its successful temporary checkout. If deployment fails, that installer keeps the checkout and prints its rollback command. A local clone can also run:
+This persistent path works after the one-line GitHub installer removes its successful temporary checkout. If deployment fails, that installer keeps the checkout and prints its rollback command. Installations made before this helper was added should use their local repository checkout. A local clone can run:
 
 ~~~sh
 ./scripts/rollback.sh

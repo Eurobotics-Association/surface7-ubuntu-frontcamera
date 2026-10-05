@@ -4,7 +4,7 @@ This repository adapts the Surface Pro 7 IPU4P camera stack for Ubuntu 24.04 and
 
 ## Current target and status
 
-The host is running Ubuntu's latest installed HWE generic kernel; the out-of-tree camera modules are registered with DKMS for the running kernel and another installed kernel with matching headers. The rollback-safe installer is deployed, including the pinned OV5693 simple-IPA tuning file and persistent `max_buffers=4` loopback setting. The service is running after a manual start. An independent `v4l2src` consumer read `/dev/video83`, and a three-second, 90-frame capture showed the operator moving in the scene. The user also saw their live image in Cheese. Cheese's terminal logs and a separate GStreamer device-monitor probe did not agree with that visible result; the discrepancy is recorded in the test log. The preview has a strong green/purple cast and low-light noise. No reboot was performed; boot-time and later kernel-upgrade behavior remain unverified. The one-time `iommu=pt` diagnostic setting is not a proven fix and remains active only for the current boot. See the [DKMS and kernel plan](docs/dkms-plan.md), [test record](docs/testing.md), and [dated investigation log](docs/front-camera-investigation-2026-10-05.md).
+The host is running Ubuntu's latest installed HWE generic kernel; the out-of-tree camera modules are registered with DKMS for the running kernel and another installed kernel with matching headers. The rollback-safe installer is deployed, including the pinned OV5693 simple-IPA tuning file and persistent `max_buffers=4` loopback setting. The service is running after a manual start. An independent `v4l2src` consumer read `/dev/video83`, and a three-second, 90-frame capture showed the operator moving in the scene. The user also saw their live image in Cheese. Cheese's terminal logs and a separate GStreamer device-monitor probe did not agree with that visible result; the discrepancy is recorded in the test log. The latest preview was captured in a very dark room lit only by a yellow LED, so darkness, noise, and color in that sample do not assess image quality under normal lighting. No reboot was performed; boot-time and later kernel-upgrade behavior remain unverified. The one-time `iommu=pt` diagnostic setting is not a proven fix and remains active only for the current boot. See the [DKMS and kernel plan](docs/dkms-plan.md), [test record](docs/testing.md), and [dated investigation log](docs/front-camera-investigation-2026-10-05.md).
 
 ## Camera path
 
@@ -44,7 +44,7 @@ The deployed stack is still under validation. Do not treat a successful DKMS bui
 
 ## Rollback
 
-The installer places a self-contained rollback helper in the product directory before deploying system files. This path works after the one-line GitHub installer has cleaned up its temporary checkout:
+Installations made from this revision place a self-contained rollback helper in the product directory before deploying system files. This path works after the one-line GitHub installer has cleaned up its temporary checkout:
 
 ~~~sh
 /usr/local/lib/surface7-ubuntu-frontcamera/scripts/rollback.sh
@@ -55,6 +55,8 @@ If you installed from a local clone, the checkout's copy also works:
 ~~~sh
 ./scripts/rollback.sh
 ~~~
+
+Installations made before this helper was added should use the rollback script from their local repository checkout.
 
 If deployment fails, the GitHub installer keeps its temporary source checkout and prints its rollback path. Rollback verifies the ownership marker, stops and disables the camera services, restores saved files and modules, removes product-scoped files, and refreshes the module and dynamic linker databases. APT packages remain installed.
 
