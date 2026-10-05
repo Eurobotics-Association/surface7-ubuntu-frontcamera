@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+[Unit]
+Description=Delay Surface Pro 7 camera initialization after boot
+
+[Timer]
+OnBootSec=60s
+AccuracySec=1s
+Unit=surface7-front-camera.service
+
+[Install]
+WantedBy=timers.target
