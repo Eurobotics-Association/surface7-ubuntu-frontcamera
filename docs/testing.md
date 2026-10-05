@@ -11,7 +11,6 @@ The DKMS modules are installed for the running Ubuntu kernel and were then built
 The user subsequently tested the virtual camera at WebcamTests.com. Their page reported `Surface Pro 7 Front Camera`, RGB, 1280 × 720 (0.92 MP), and 29 FPS, with no built-in microphone or speaker. This is user-reported browser validation of the active stream; it does not prove Cheese discovery or idle power behavior. The listed 24.51% lightness, 26.58% luminosity, and 25.23% brightness are consistent with the low-light room described above. The site's quality score and file/bitrate estimates are retained as its reported output, not as independent measurements.
 
 
-
 The user has since compared applications on WebcamTests.com. Brave and Opera both displayed live front-camera video; the supplied Opera screenshot reports `Surface Pro 7 Front Camera`, RGB, 1280 × 720, and 29 FPS. Firefox did not start the camera and displayed the site's generic message that the webcam was in use or blocked; its selector showed `videoinput#1`, and no camera information or usable preview was produced. The page did not expose the underlying WebRTC error, so “busy” is the site's wording rather than a confirmed `NotReadableError`. The user reports that Cheese does not find a camera, superseding the earlier single successful preview as current status. The user did not report whether every other browser camera stream was stopped before the Firefox attempt; a single-client test remains necessary to rule out contention.
 
 | Application | Result reported by user | What the evidence establishes |
