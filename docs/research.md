@@ -21,7 +21,7 @@ The [Zorin forum thread about Surface Pro 7 cameras](https://forum.zorin.com/t/s
 
 ## Surface 5 repository review
 
-The complete Eurobotics-Association/surface5-frontcamera repository was read before adapting this project, including its source, documentation, scripts, checks, and rollback instructions. Its camera details target different Surface hardware, so the Surface 7 implementation follows the Surface 7 IPU4P source and direct GStreamer capture reference. Process ideas carried forward include pinned source provenance, read-only preflight, build-only mode, bounded backups, rollback, and moving-frame acceptance checks. No Surface 5 files were changed.
+The complete Eurobotics-Association/surface5-frontcamera repository was read before adapting this project, including its source, documentation, scripts, checks, and rollback instructions. Surface 5 uses an Intel IPU3 CIO2/IMGU graph and the `libcamera` IPU3 pipeline; Surface 7 uses Intel IPU4P, which is not supported by an upstream kernel driver and needs a patched out-of-tree stack plus CSE firmware authentication. Both can use GStreamer at the application/bridge layer, but GStreamer cannot compensate for an absent or unauthenticated kernel camera pipeline. Surface 5's successful result therefore validates the capture approach, not the Surface 7 driver stack. Process ideas carried forward include pinned source provenance, read-only preflight, build-only mode, bounded backups, rollback, and moving-frame acceptance checks. No Surface 5 files were changed.
 
 ## Ubuntu adaptation
 
@@ -29,7 +29,7 @@ The Surface 7 source release's installer targets a different Linux distribution,
 
 ## Current-kernel compatibility
 
-The target is Ubuntu 24.04 x86_64 with the latest installed Ubuntu HWE kernel. The [Linux Surface IPU4 discussion](https://github.com/linux-surface/linux-surface/discussions/1353) reports the newer Surface Pro 7 patch series validated on Linux 6.19.8. This project's DKMS modules build and load on the host's current Ubuntu HWE kernel, and the media graph is created, but root-privileged GStreamer capture attempts time out without frames while kernel logs show CSE firmware-authentication failures. A successful DKMS build does not establish runtime compatibility. The project's deployment still needs validation that module autoload is blocked on this Ubuntu installation before the timer-driven load.
+The target is Ubuntu 24.04 x86_64 with the latest installed Ubuntu HWE kernel. The [Surface 7 reference's working report](https://github.com/ConsultingFuture4200/sp7-camera/blob/main/docs/both-cameras-working.md) is validated on Arch/Linux 6.19.8 and says its patches do not apply directly to 7.x. This project's DKMS modules build and load on the host's Ubuntu 7.x kernel, and the 60-second timer successfully creates the media graph, but the CSE firmware handshake still fails and GStreamer receives no camera from libcamera. A successful DKMS build or media-node enumeration does not establish runtime compatibility. The next work must compare and forward-port the driver/firmware initialization path while retaining the current Ubuntu kernel target.
 
 ## DKMS assessment
 

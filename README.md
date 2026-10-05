@@ -4,7 +4,7 @@ This repository adapts the Surface Pro 7 IPU4P camera stack for Ubuntu 24.04 and
 
 ## Current target and status
 
-The host is running Ubuntu's latest installed HWE generic kernel; the out-of-tree camera modules are registered with DKMS and installed for the current and a second installed Ubuntu kernel. The boot helper created the IPU4 media graph, but root-privileged GStreamer enumeration and capture attempts timed out without producing frames while the kernel reported CSE firmware-authentication errors. A 60-second systemd timer is now deployed for the next boot; its effect on camera capture remains untested. Camera support remains experimental. See the [DKMS and kernel plan](docs/dkms-plan.md) and [test record](docs/testing.md).
+The host is running Ubuntu's latest installed HWE generic kernel; the out-of-tree camera modules are registered with DKMS and installed for the current and a second installed Ubuntu kernel. The 60-second timer loaded the IPU4 stack and created the media graph, but CSE firmware authentication still failed and libcamera did not enumerate the front camera. No frames were captured. Camera support remains experimental. See the [DKMS and kernel plan](docs/dkms-plan.md) and [test record](docs/testing.md).
 
 ## Camera path
 
