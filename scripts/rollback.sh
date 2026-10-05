@@ -18,8 +18,46 @@ if [[ "$actual_marker" != "$expected_marker" ]]; then
     exit 1
 fi
 
-backup="$SURFACE7_BACKUP_ROOT/$SURFACE7_TARGET_KERNEL"
-module_dir="/lib/modules/$SURFACE7_TARGET_KERNEL/updates/extra"
+deployment_kernel_marker="$SURFACE7_LIBDIR/deployment-kernel"
+if sudo test -f "$deployment_kernel_marker"; then
+    deployed_kernel="$(sudo cat "$deployment_kernel_marker")"
+else
+    echo "Refusing rollback: deployment kernel record is missing." >&2
+    exit 1
+fi
+if [[ ! "$deployed_kernel" =~ ^[A-Za-z0-9._+-]+$ ]]; then
+    echo "Refusing rollback: deployment kernel record is invalid." >&2
+    exit 1
+fi
+
+dkms_package="surface7-ubuntu-frontcamera"
+dkms_version="0.1.0"
+dkms_source="/usr/src/${dkms_package}-${dkms_version}"
+dkms_registration="/var/lib/dkms/${dkms_package}/${dkms_version}"
+expected_source_marker="$(cat "$ROOT/config/ownership-marker")"
+if sudo test -e "$dkms_source"; then
+    source_marker="$dkms_source/.surface7-ubuntu-frontcamera-owned"
+    if ! command -v dkms >/dev/null 2>&1; then
+        echo "Refusing rollback: dkms is required to remove the registered modules safely." >&2
+        exit 1
+    fi
+
+    if sudo test -f "$source_marker"; then
+        if [[ "$(sudo cat "$source_marker")" != "$expected_source_marker" ]]; then
+            echo "Refusing rollback: DKMS source ownership marker does not match this project." >&2
+            exit 1
+        fi
+    elif sudo test -e "$dkms_registration"; then
+        echo "Refusing rollback: unmarked DKMS source has a registered module; refusing to remove it." >&2
+        exit 1
+    fi
+
+    if sudo test -e "$dkms_registration"; then
+        sudo dkms remove -m "$dkms_package" -v "$dkms_version" --all
+    fi
+fi
+
+backup="$SURFACE7_BACKUP_ROOT/$deployed_kernel"
 
 restore_or_remove() {
     local path="$1"
@@ -58,6 +96,8 @@ restore_unit_enablement() {
 
 front_state="$(saved_unit_state surface7-front-camera.service)"
 boot_state="$(saved_unit_state sp7-camera-boot.service)"
+timer_state="$(saved_unit_state surface7-front-camera.timer)"
+sudo systemctl disable --now surface7-front-camera.timer 2>/dev/null || true
 sudo systemctl disable --now surface7-front-camera.service 2>/dev/null || true
 sudo systemctl disable --now sp7-camera-boot.service 2>/dev/null || true
 
@@ -66,6 +106,7 @@ system_files=(
     /usr/local/sbin/sp7-camera-boot
     /etc/default/surface7-front-camera
     /etc/systemd/system/surface7-front-camera.service
+    /etc/systemd/system/surface7-front-camera.timer
     /etc/modprobe.d/ipu4p.conf
     /etc/modprobe.d/sp7-v4l2loopback.conf
     /etc/modules-load.d/sp7-v4l2loopback.conf
@@ -75,18 +116,47 @@ system_files=(
 )
 for path in "${system_files[@]}"; do restore_or_remove "$path"; done
 
-for module in ov8865.ko dw9719.ko ipu-bridge.ko intel-ipu4p.ko intel-ipu4p-isys.ko intel-ipu4p-psys.ko intel-ipu4p-isys-csslib.ko intel-ipu4p-psys-csslib.ko v4l2loopback.ko; do
-    restore_or_remove "$module_dir/$module"
-done
 restore_or_remove /usr/lib/firmware/ipu4p_cpd.bin
 
+# DKMS removes the project's modules. Restore only module files captured by its
+# pre-install hook; an unrelated file without a saved copy is left untouched.
+for kernel_path in /lib/modules/*; do
+    [[ -d "$kernel_path" ]] || continue
+    kernel_version="$(basename -- "$kernel_path")"
+    backup="$SURFACE7_BACKUP_ROOT/$kernel_version"
+    for module in ov8865.ko dw9719.ko ipu-bridge.ko intel-ipu4p.ko intel-ipu4p-isys.ko intel-ipu4p-psys.ko intel-ipu4p-isys-csslib.ko intel-ipu4p-psys-csslib.ko v4l2loopback.ko; do
+        saved="$backup/lib/modules/$kernel_version/updates/dkms/$module"
+        if sudo test -e "$saved" || sudo test -L "$saved"; then
+            current="$kernel_path/updates/dkms/$module"
+            if sudo test -e "$current" || sudo test -L "$current"; then
+                if ! sudo cmp -s "$saved" "$current"; then
+                    echo "Refusing rollback: module path changed after deployment: $current" >&2
+                    exit 1
+                fi
+            else
+                sudo mkdir -p "$kernel_path/updates/dkms"
+                sudo cp -a "$saved" "$current"
+            fi
+        fi
+    done
+done
+
+if sudo test -e "$dkms_source"; then
+    sudo rm -rf -- "$dkms_source"
+fi
+
 sudo rm -rf -- "$SURFACE7_LIBDIR"
-sudo depmod -a "$SURFACE7_TARGET_KERNEL"
+for kernel_path in /lib/modules/*; do
+    [[ -d "$kernel_path" ]] || continue
+    [[ -f "$kernel_path/modules.order" ]] || continue
+    sudo depmod -a "$(basename -- "$kernel_path")"
+done
 sudo ldconfig
 sudo systemctl daemon-reload
 restore_unit_enablement surface7-front-camera.service "$front_state"
 restore_unit_enablement sp7-camera-boot.service "$boot_state"
+restore_unit_enablement surface7-front-camera.timer "$timer_state"
 sudo systemctl daemon-reload
 
-printf '\nRollback finished. Backups remain at %s\n' "$backup"
+printf '\nRollback finished. Backups remain under %s\n' "$SURFACE7_BACKUP_ROOT"
 printf 'APT packages remain installed. Reboot manually to restore the prior camera module state.\n'
