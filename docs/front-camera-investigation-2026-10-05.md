@@ -71,3 +71,28 @@ The delayed systemd timer is enabled, but no reboot or kernel upgrade test occur
 The image-flow problem has converged for direct capture: after rollback-safe installation, the camera now delivers visibly moving frames through libcamera, GStreamer, and `/dev/video83`. The unresolved items are Cheese/ordinary-application enumeration, color/noise quality, delayed startup after reboot, and persistence following a later Ubuntu kernel installation. The camera remains experimental until those integration and persistence checks pass.
 
 Next, investigate the contradictory device-monitor logs only if they affect reliable startup, and continue with GStreamer image-quality work. Do not reboot unless explicitly authorized; before any approved reboot, broadcast to all logged-in users and wait at least two full minutes.
+
+## Follow-up: continuous LED and Cheese enumeration — 5 October 2026
+
+The existing `surf7cam-test` tmux pane was reused; no new tmux session was created. Read-only inspection showed `surface7-front-camera.service` active and running the product GStreamer command as PID 90319. That process continuously opens the physical libcamera sensor and writes to `/dev/video83`, even when no desktop application is consuming the loopback. This is why the white privacy LED remains on. It is expected from the current always-on bridge design, not evidence of a hidden Cheese connection. Stopping the service would release the sensor and turn the LED off, but would also stop populating the virtual camera. An on-demand producer design is a separate follow-up; do not stop the live service merely to clear the LED.
+
+The current system service, DKMS module set, and `/dev/video83` were present on the running Ubuntu kernel. The producer owned the loopback node. The loopback has capture capability according to `v4l2-ctl`; the device also has the expected label, format, size, and user access. No reboot or module reload was performed.
+
+GStreamer enumeration now explains part of the Cheese discrepancy: `gst-device-monitor-1.0 Video/Source` did not list the loopback node, but `gst-device-monitor-1.0 --include-hidden Video/Source` did. The hidden entry was `/dev/video83`, labeled `Surface Pro 7 Front Camera`, with YUY2 1280 × 720 at 30 fps. Its provider metadata described `device.capabilities=:video_output:` even though V4L2's active device caps report video capture. The local result establishes hidden/contradictory GStreamer metadata; it does not yet prove which provider implementation or metadata field causes Cheese to omit the camera. The GStreamer [device-provider API](https://gstreamer.freedesktop.org/documentation/gstreamer/gstdeviceprovider.html) is the discovery interface applications commonly use. The libcamera upstream discussion [patch 20002](https://patchwork.libcamera.org/patch/20002/) describes the libcamera provider hiding the V4L2 provider to avoid duplicate enumeration; this is a candidate explanation, not yet a confirmed local root cause.
+
+Reader-mode checks separated buffer compatibility from image production. `v4l2-ctl` read five loopback frames successfully. A GStreamer `v4l2src` reader in its default MMAP mode failed with `Failed to allocate a buffer` / stream error `-5`. Setting `io-mode=rw` made the bounded GStreamer reader succeed. A one-frame 1280 × 720 JPEG was then captured through `v4l2src io-mode=rw`; it decoded and showed non-black scene pixels under the room's small light. The private image was inspected locally and was not committed. This confirms current still-frame delivery through the loopback read/write path, but it does not show that Cheese is using that mode or that Cheese can enumerate the hidden device.
+
+Reproducible still-frame command used:
+
+~~~sh
+gst-launch-1.0 -e v4l2src device=/dev/video83 io-mode=rw num-buffers=1 \
+  ! video/x-raw,format=YUY2,width=1280,height=720,framerate=30/1 \
+  ! videoconvert ! jpegenc quality=90 \
+  ! filesink location=/tmp/surface7-front-camera-still.jpg
+~~~
+
+The output image remained under `/tmp` on the host and was not uploaded. The frame was a low-light image-quality observation, not the moving-frame acceptance test.
+
+The user reports that Cheese currently sees no camera. This supersedes the earlier single Cheese preview as the current acceptance state: the earlier preview proves that an app preview succeeded once, but Cheese discovery/capture is intermittent or state-dependent and is not considered resolved. Keep the distinct results separate: the producer is active, V4L2 readback works, GStreamer read/write capture works, default GStreamer device discovery does not expose the node, and current Cheese enumeration fails. Do not describe Cheese integration as consistently passing.
+
+Next, investigate the provider-hide behavior and device-capability mismatch without changing PipeWire, reloading the IPU stack, or rebooting. Test candidate GStreamer/provider workarounds against device enumeration first, then run Cheese only when the user is available to observe the desktop. Preserve the active producer meanwhile. A future no-idle-LED design must start the producer only when a consumer needs the virtual camera and must keep first-frame latency acceptable; continuous service is the current tradeoff.
