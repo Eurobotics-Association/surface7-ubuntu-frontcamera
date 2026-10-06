@@ -12,9 +12,10 @@ branch, deploy files to the host, install packages, reload modules, or reboot.
 The first prototype component, `prototypes/v4l2loopback-client-watch.c`, is
 only an event observer. It subscribes to the v4l2loopback `CLIENT_USAGE`
 event and prints the capture-active state. It does not start or stop GStreamer
-and does not call `VIDIOC_STREAMON`. It has not yet been compiled or run on the
-Surface host. Live testing needs Robert present with the elevated
-`surf7cam-test` tmux session available.
+and does not call `VIDIOC_STREAMON`. It compiles locally with the Ubuntu C
+compiler and strict warnings enabled. It has not yet been run against a V4L2
+node or the Surface camera. Live testing needs Robert present with the
+elevated `surf7cam-test` tmux session available.
 
 ## Why this design
 
@@ -80,6 +81,38 @@ may help preserve the capture format, but it can also affect producer
 attachment. No persistent module or camera configuration is changed until
 this is demonstrated on a disposable test node.
 
+## Idle-node discovery without a continuous black video stream
+
+The current configuration uses `exclusive_caps=1`. With no producer attached,
+v4l2loopback advertises an OUTPUT-only device, which ordinary webcam apps may
+not list. Two idle-device approaches need a controlled comparison:
+
+1. **Retain a negotiated capture format.** Try `keep_format` on a temporary
+   loopback node. Confirm that applications see a CAPTURE device with no
+   producer, then confirm a GStreamer producer can still attach after a real
+   capture request. Upstream documentation and code describe related format
+   behavior, but do not establish that this sequence works for this camera and
+   these clients.
+2. **Keep a tiny idle relay attached.** The vendored upstream bundle has a
+   relay design for this exact exclusive-caps discovery problem. It writes one
+   black YUYV initialization frame so the node is advertised as CAPTURE, then
+   waits for real frames on a named FIFO. It does not generate black frames on
+   a timer. The physical camera can remain off while the relay holds the
+   virtual producer side open. On `CLIENT_USAGE` active, an on-demand GStreamer
+   pipeline would write live `libcamerasrc` frames to the FIFO; after the last
+   inactive event and grace period, that pipeline would stop. The one
+   initialization frame is held in the loopback's memory until live video
+   arrives; it is not written to disk. Applications may briefly see a black
+   initial frame or time out while the sensor starts, so this needs the full
+   desktop/browser test matrix.
+
+The relay approach costs one small idle process, an open loopback device, and
+memory for the retained frame. It avoids a continuously running capture
+pipeline and repeated frame generation. The FIFO should live under a runtime
+directory such as `/run`, not on persistent storage. The unmodified vendor
+relay source is a reference only; this project will keep the vendor snapshot
+unchanged and implement any GStreamer adaptation in a separate prototype.
+
 ## Prototype phases
 
 1. **Event observer:** compile the small watcher without sudo, then run it on
@@ -88,9 +121,10 @@ this is demonstrated on a disposable test node.
    transitions. The watcher opens the loopback node only to subscribe to its
    event; it does not stream video.
 2. **Idle-node compatibility:** on a separate temporary V4L2 loopback node,
-   determine whether the camera remains discoverable before a producer exists
-   and whether GStreamer can attach after `STREAMON`. Keep `/dev/video83` and
-   its current producer untouched during this phase.
+   compare `keep_format` with the one-frame idle relay. Determine whether
+   Cheese and browsers discover the camera before live frames exist, and
+   whether GStreamer can attach after `STREAMON`. Keep `/dev/video83` and its
+   current producer untouched during this phase.
 3. **On-demand controller:** only after the event and node behavior are
    confirmed, add a controller that starts the existing GStreamer service on
    active capture and stops it after a grace period. Keep system changes behind
