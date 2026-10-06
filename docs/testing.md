@@ -57,3 +57,30 @@ The repository installer now deploys the pinned OV5693 tuning file, sets `max_bu
 Still needed: first retest Firefox with every other browser camera stream stopped, then use Mozilla's WebRTC test page to capture the exact Firefox error and selected camera; resolve GStreamer device-provider hiding/capability metadata and default-MMAP buffer allocation so Cheese can reliably enumerate and open the camera; assess image quality under normal room lighting; design an on-demand producer if the user wants the LED off while idle; verify the delayed service after an approved reboot; and test a later Ubuntu kernel installation. No reboot has been performed in this test sequence. Do not retry the earlier raw-buffer path as the next diagnostic; moving pixels and V4L2 read/write loopback readback are proven with the installed settings.
 
 Moving non-black frames from `/dev/video83` are verified. Ordinary application access succeeded once in Cheese but currently fails to enumerate reliably, so it remains open acceptance work. Acceptance also requires persistence after reboot/kernel update and acceptable image quality. Build success, camera enumeration, an LED, or negotiated caps alone are not acceptance.
+
+
+## Controlled Firefox and Cheese probes — 6 October 2026
+
+The user's application matrix remains: Brave and Opera show live video; Firefox and Cheese do not. The following headless and temporary-node tests are separate from that user-visible result.
+
+### Firefox
+
+The installed browser node is /dev/video83; Mozilla's Linux V4L2 backend scans numbered nodes only through /dev/video63 ([Firefox source](https://searchfox.org/firefox-main/source/third_party/libwebrtc/modules/video_capture/linux/video_capture_v4l2.cc)). This explains why the current node is absent from Firefox's scanner, but moving the loopback into range has not produced a repeatable fix.
+
+A temporary native loopback node /dev/video62 passed a five-frame V4L2 read. One Firefox WebRTC log then counted 12 capture devices: 11 raw ipu4p entries followed by Surface Pro 7 Front Camera. Its default getUserMedia({video:true}) still selected a raw endpoint and failed with NotReadableError. A later repeat using a fresh temporary Firefox profile with a local camera permission counted only the 11 raw entries; page JavaScript saw one unlabeled input and got NotFoundError. No real Firefox profile or preference was changed. The native camera's appearance at node 62 is therefore inconsistent, and no targeted successful Firefox capture is verified.
+
+### Cheese and GStreamer discovery
+
+With the deployed exclusive_caps=1 setting, the ordinary gst-device-monitor-1.0 Video/Source listing omits /dev/video83. The --include-hidden report shows the card label and YUYV 1280 × 720 caps, but advertises device.capabilities=:video_output: while V4L2's device_caps includes Video Capture. This remains the concrete discovery mismatch to investigate.
+
+A temporary exclusive_caps=0 reload made the ordinary GStreamer monitor list the camera as a Video/Source. It did not prove usable frames: a bounded v4l2src io-mode=rw read timed out with “Signal lost / No input source was detected,” and a V4L2 MMAP probe printed VIDIOC_STREAMON I/O error even though v4l2-ctl returned exit code 0. Do not count that command's exit code as a frame-read pass. The setting was rejected and is not deployed.
+
+GNOME documents that Cheese's --device argument expects the camera's display name, not a /dev/videoX path ([GNOME Bug 777047](https://bugzilla.gnome.org/show_bug.cgi?id=777047#c1)). My first direct Cheese invocation passed /dev/video83, so it did not select the loopback. Later isolated attempts using the reported display names still showed the Cheese process holding raw /dev/video42, not /dev/video83; they do not establish a Cheese capture pass. The ordinary GStreamer visibility change under exclusive_caps=0 also did not establish that Cheese read frames.
+
+### Rollback and current host state
+
+One temporary test runner failed inside its cleanup after Cheese did not exit on the first signal. I stopped the bridge, removed the temporary loopback module, reloaded it from the unchanged product configuration, restarted the bridge, and verified recovery. Subsequent node-62 probes used the existing rollback harness and restored node 83.
+
+The final bounded read from /dev/video83 received five frames. The loaded settings are again node 83, four buffers, and exclusive_caps=1; the camera service is active. The test sequence installed no packages and performed no reboot. The highest observed temperature was 72°C, below the user's 95°C pause threshold.
+
+No Cheese or Firefox fix is accepted yet. Keep the product experimental. Next, resolve the V4L2/GStreamer capture-class mismatch without changing the rejected PipeWire path; then verify that Cheese opens /dev/video83 and returns frames. For Firefox, repeat selection only when its actual device list exposes the Surface camera; a scanner log entry or a node in range is not a capture pass.
