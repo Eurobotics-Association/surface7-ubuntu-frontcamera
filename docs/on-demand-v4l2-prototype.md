@@ -1,6 +1,6 @@
 # On-demand V4L2 camera implementation
 
-Updated: 6 October 2026, 23:40 CEST
+Updated: 6 October 2026, 23:50 CEST
 
 ## Status
 
@@ -8,7 +8,7 @@ This experimental implementation keeps the Surface Pro 7 front RGB camera discov
 
 The installed design uses an idle relay plus a capture-event controller. While idle, the relay holds one initialization frame in v4l2loopback and waits on a FIFO. It does not generate repeating black frames. When a client starts capture, v4l2loopback CLIENT_USAGE changes to active and the controller starts the GStreamer/libcamera pipeline. After the capture state remains idle for the two-second grace period, the controller stops GStreamer and releases the physical camera.
 
-Robert's latest WebcamTests.com run eventually showed live 1280×720 RGB video at 29 FPS, labeled “Surface Pro 7 Front Camera.” The user reports three attempts and repeated source start/stop cycles before a sustained result. Closing the successful tab stopped the source and the white LED went out. This is a successful browser capture and idle-release observation, with startup reliability still open.
+Robert's latest WebcamTests.com run eventually showed live 1280×720 RGB video at 29 FPS. He did not manually retry. The page first listed one camera name; after permission approval it showed a different name, asked for approval again despite the recent approval, stopped the stream, and restarted it automatically. The selected label then changed to “Surface Pro 7 Front Camera” as stable frames appeared. Closing the successful tab stopped the source and white LED. This verifies one eventual browser capture and idle release. The browser/device identity transition is unexplained; Teams and Google Meet have not been tested.
 
 The latest Cheese attempt did not discover the synthetic camera. Earlier Cheese tests with an isolated provider showed a preview, but this has not been reliable in the current deployment. Firefox has not been retested on the current on-demand services; earlier tests failed. Brave and Opera previously worked in user tests on an earlier service version and still need current-version retesting. Some sessions showed an inverted image while Brave/Opera earlier looked upright. Do not add a global rotation; verify orientation separately for each application.
 
@@ -87,7 +87,7 @@ The previous-deployment rollback restores recorded active/enabled states. If the
 | Test | Result | What it proves |
 | --- | --- | --- |
 | Direct V4L2 read | Earlier pass: 30 frames received from /dev/video83. | The on-demand relay/controller can deliver real frames. A temporary sample was upright (ceiling at top). |
-| WebcamTests.com | Latest user-reported pass after three attempts; 1280×720 RGB at 29 FPS. | Browser capture can work. Repeated source start/stop before success remains a reliability issue. |
+| WebcamTests.com | Latest user-reported eventual pass; 1280×720 RGB at 29 FPS. | Page changed the camera name after permission, requested approval again, then automatically stopped/restarted capture and settled on “Surface Pro 7 Front Camera.” Robert did not manually retry. Root cause remains unresolved. |
 | Stop on close | User observed feed stop and white LED turn off after closing the successful browser tab. | The physical source is released at idle for that session. |
 | Cheese | Latest user report: Cheese did not discover the synthetic camera. | Not accepted. Earlier isolated-provider preview is historical and needs repeatable retesting. |
 | Firefox | Not retested on current on-demand deployment; previous attempts failed. | Not accepted. |
@@ -101,13 +101,13 @@ The previous-deployment rollback restores recorded active/enabled states. If the
 - The next attempt loaded Ubuntu's stock libcamerasrc and could not find the configured Surface camera. The on-demand unit lacked the product-built libcamera plugin path. PR #15 added the Surface plugin path, a runtime-scoped GStreamer registry, and a load preflight. After merge/redeployment, a bounded V4L2 read delivered 30 frames. PR #16 recorded that evidence and its limits.
 - The ordinary GStreamer Video/Source monitor hides /dev/video83 because the libcamera provider hides V4L2 devices it does not own. The --include-hidden listing showed the node with misleading provider capability metadata. A process-scoped GStreamer provider prototype exposed only the loopback and its v4l2src element delivered buffers, but emitted two GStreamer critical warnings. It was not installed globally.
 - An isolated Cheese provider previously showed a preview, but later tests and the latest user report found Cheese could not discover the synthetic camera. The application integration remains unresolved.
-- User WebcamTests.com testing later succeeded, unlike an earlier in-app attempt that ended in a paused track. The latest browser session required retries and then released the camera/LED on tab close; do not keep the earlier paused state as the latest result.
+- User WebcamTests.com testing later succeeded, unlike an earlier in-app attempt that ended in a paused track. In the latest session, the page automatically changed its listed camera identity across permission approval, showed a second approval prompt, and stopped/restarted the stream before settling on the Surface Pro 7 camera. Robert did not manually retry. The source/LED stopped when the tab closed. The exact browser/device enumeration cause is unverified.
 
 ## Next tests
 
 1. Resolve Cheese discovery with the process-scoped provider. Inspect what Cheese and GstDeviceMonitor see, confirm the selected device is /dev/video83, and verify actual moving frames through Cheese. Capture logs for the provider's GStreamer critical warnings.
-2. Repeat WebcamTests in one browser at a time, note permission/device-label changes and capture start/stop events, wait for stable frames, then close the tab and verify idle release.
-3. Test Brave and Opera against this deployment, then test Firefox alone and record its selected device and exact failure.
+2. Repeat WebcamTests in one browser at a time. Capture the device list, selected device IDs/labels, browser permission state, devicechange events, console/WebRTC logs, and service transitions across the approval prompt. Wait for stable frames, then close the tab and verify idle release.
+3. Test Brave and Opera against this deployment, then test Firefox alone and record its selected device and exact failure. Teams and Google Meet remain unknown; test them separately after the core path is stable.
 4. Record orientation per client; avoid global rotation until all client results support it.
 5. Keep the provider temporary until repeatable Cheese results, robust rollback coverage, and application tests pass. Do not reboot or reload modules without explicit authorization. Any approved reboot requires a system-wide warning and a full two-minute wait.
 
