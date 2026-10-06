@@ -135,7 +135,9 @@ int main(int argc, char **argv)
                     return 4;
                 }
             }
-            if (errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR) {
+            /* Nonblocking V4L2 event dequeue uses ENOENT for an empty queue. */
+            if (errno != ENOENT && errno != EAGAIN &&
+                errno != EWOULDBLOCK && errno != EINTR) {
                 fprintf(stderr, "VIDIOC_DQEVENT %s: %s\n", device,
                         strerror(errno));
                 close(fd);
