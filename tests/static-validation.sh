@@ -138,6 +138,7 @@ grep -Fq 'deployed_kernel="$(sudo cat "$deployment_kernel_marker")"' "$ROOT/scri
 grep -Fq 'for path in "${system_files[@]}"; do backup_once "$path"; done' "$ROOT/scripts/deploy-services.sh"
 grep -Fq 'systemctl enable surface7-front-camera-idle-relay.service' "$ROOT/scripts/deploy-services.sh"
 grep -Fq 'systemctl enable surface7-front-camera-on-demand.service' "$ROOT/scripts/deploy-services.sh"
+grep -Fq 'systemctl restart surface7-front-camera-on-demand.service' "$ROOT/scripts/deploy-services.sh"
 grep -Fq 'systemctl disable --now surface7-front-camera.timer' "$ROOT/scripts/deploy-services.sh"
 grep -Fq 'systemctl stop surface7-front-camera.service' "$ROOT/scripts/deploy-services.sh"
 grep -Fq 'pre-on-demand' "$ROOT/scripts/deploy-services.sh"
