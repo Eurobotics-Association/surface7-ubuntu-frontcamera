@@ -1,233 +1,157 @@
-# On-demand V4L2 camera prototype
+# On-demand V4L2 camera implementation
 
 Updated: 6 October 2026
 
-## Scope and status
+## Status
 
-This is a separate, experimental branch: `codex/on-demand-v4l2-prototype-20261006`.
-It starts a GStreamer-based prototype for powering the Surface Pro 7 front
-camera only while a V4L2 client is capturing. It does not change the main
-branch, deploy files to the host, install packages, reload modules, or reboot.
+This branch implements an experimental on-demand camera path for the Surface
+Pro 7 front RGB camera. It keeps the V4L2 camera node discoverable without
+running the physical sensor pipeline continuously.
 
-The prototype has two user-space components. `prototypes/v4l2loopback-client-watch.c`
-subscribes to the v4l2loopback `CLIENT_USAGE` event and prints the
-capture-active state. `prototypes/on-demand-gstreamer-controller.py` watches
-those events, starts the existing `libcamerasrc` capture settings on active
-capture, and stops that GStreamer process after an idle grace period. The
-controller only writes to a pre-existing named FIFO; it refuses a regular
-file path. Both sources pass local compiler/syntax checks. On 6 October 2026, the event
-observer was run against the deployed `/dev/video83` as the desktop user. Its
-first build received the initial inactive event, then exited when a second
-nonblocking dequeue returned `ENOENT` for an empty queue. After fixing that
-handling, a temporary out-of-tree build observed browser capture transitions
-`0 → 1 → 0`; Cheese emitted a brief startup `1 → 0 → 1`, remained active
-while its preview was open, and returned to `0` when closed. The current
-producer service was left running throughout. The GStreamer controller and
-idle relay have not been run on hardware. Later tests of a different node
-configuration still require Robert present with the elevated
-`surf7cam-test` tmux session available.
+The observer was tested against the installed `/dev/video83`: the in-app
+WebcamTests page and Cheese caused `CLIENT_USAGE` transitions, and both
+returned to idle after capture ended. Cheese and browser image capture worked
+on the existing always-on producer. Robert confirmed that the Cheese preview
+was upright. The currently installed always-on systemd service has since been
+stopped, its boot timer disabled, and Robert confirmed the white camera LED
+went out; no reboot or module reload was needed.
 
-## Why this design
+The relay/controller deployment and full desktop/browser acceptance tests are
+still pending. Do not describe the on-demand implementation as validated until
+the new services produce moving frames and stop the physical GStreamer
+pipeline after capture in the user-facing tests.
 
-The currently deployed `surface7-front-camera.service` continuously owns the
-physical camera and sends frames to `/dev/video83`. This explains why the
-front-camera LED remains lit when no application is viewing the feed.
+## Why on-demand
 
-The V4L2 device node and the physical sensor have separate lifecycles. Keep a
-stable virtual camera node for applications to discover, then start the real
-GStreamer/libcamera pipeline when a client actually requests capture. Stop the
-pipeline after the last capture request has ended and a short grace period has
-passed. An idle event listener can wait for transitions without generating
-frames or recording image data. No app-name detection or TCP webcam server is
-needed; the operating-system camera interface remains `/dev/videoN`.
+The old `surface7-front-camera.service` continuously ran
+`libcamerasrc` into `/dev/video83`. That kept the front-camera LED lit even
+when no application was capturing. Stopping this service extinguished the LED
+without a reboot.
 
-The Surface Pro 7 source bundle already vendors unmodified v4l2loopback
-v0.15.4. Its `CLIENT_USAGE` private event is emitted on capture
-`VIDIOC_STREAMON` and `VIDIOC_STREAMOFF`; the payload represents inactive or
-active capture state, not the requesting application's identity. The bundle
-also contains an observer at
-`upstream/surface-pro-7-camera/src/sp7-camera-client-usage.c`. Its full
-camera backend starts PipeWire streams. This prototype borrows only the
-v4l2loopback event interface and will start the existing GStreamer/libcamera
-front-camera path. It will not add a PipeWire camera source, SPA plugin, or
-WirePlumber rule.
+Applications discover a V4L2 node before capture starts, so the node must stay
+present and advertise capture capability while the physical sensor is idle.
+The design keeps a small relay attached to v4l2loopback and sends a single
+initialization frame. The relay then waits on a named FIFO; it does not emit
+repeating black frames. When an application starts V4L2 capture, the kernel
+event watcher starts the existing GStreamer/libcamera pipeline. After the
+capture-active state returns to idle for a short grace period, the controller
+stops GStreamer, which releases the physical camera and should extinguish the
+LED.
 
-References:
+This uses no app-name detection, TCP webcam server, PipeWire camera source,
+SPA plugin, or WirePlumber camera rule. The device remains
+`/dev/video83`.
 
-- [Pinned v4l2loopback source base](source-bases.md): v0.15.4,
-  commit `0f9ee86760b7f2bea174b7e3e7a1d38845da0ab4`.
-- [Upstream v4l2loopback event implementation](https://github.com/v4l2loopback/v4l2loopback/blob/main/v4l2loopback.c)
-  queues the private usage event at capture stream start/stop.
+## V4L2 event semantics
+
+The pinned v4l2loopback source is v0.15.4,
+commit `0f9ee86760b7f2bea174b7e3e7a1d38845da0ab4`. Its
+`client_usage_queue_event()` stores `!has_capture_token(stream_tokens)` in
+the event payload. The value is a Boolean: `0` means no capture stream is
+active; `1` means capture is active. It does not identify the application
+and does not count clients. The event is queued on capture
+`VIDIOC_STREAMON` and `VIDIOC_STREAMOFF`.
+
+The observer subscribes with `V4L2_EVENT_SUB_FL_SEND_INITIAL`, polls the
+event fd, and drains the nonblocking queue. Linux returns `ENOENT` when
+`VIDIOC_DQEVENT` finds an empty queue, which is treated as normal. The
+controller starts the GStreamer process on state `1` and stops it after
+state `0` remains for the configured two-second grace period. Two-client
+contention is a separate acceptance case; it is not inferred from this
+Boolean event.
+
+## Runtime flow
+
+```text
+Cheese / Firefox / Brave / Opera requests /dev/video83
+                 |
+                 v
+v4l2loopback CLIENT_USAGE reports capture_active=1
+                 |
+                 v
+controller starts libcamerasrc -> convert/scale -> FIFO
+                 |
+                 v
+idle relay writes live YUYV frames to /dev/video83
+                 |
+                 v
+capture_active=0 -> grace period -> stop GStreamer
+```
+
+The idle relay source is the pinned and unmodified
+`upstream/surface-pro-7-camera/src/sp7-camera-relay.c`. It sets a 1280×720
+YUYV output format, writes one black initialization frame, then polls the
+named FIFO for complete live frames. A dummy FIFO writer prevents an idle EOF.
+The single initialization frame is retained in v4l2loopback memory and is
+not saved to disk. The relay process uses little idle CPU and memory; it does
+not continuously generate frames. It owns the V4L2 producer side so
+`exclusive_caps=1` continues to expose the node as a capture camera.
+
+The controller starts GStreamer with the already documented camera name,
+source mode, automatic exposure, and output size. It sends YUYV to the FIFO,
+and never writes captured images to persistent storage. The small two-second
+grace period prevents rapid camera power cycling during app startup or brief
+stream interruptions.
+
+## Deployment and rollback
+
+`scripts/deploy-services.sh` checks/install required Ubuntu packages,
+confirms the running kernel matches the existing DKMS deployment marker,
+builds the watcher and pinned relay in a temporary directory, and validates
+the Python controller. Before replacing system files, it backs up the current
+services, timer, binaries, configuration, and unit enablement states. The
+pre-on-demand snapshot is stored once under
+`/var/lib/surface7-ubuntu-frontcamera/backup/<kernel>/pre-on-demand`.
+
+The deployment disables and removes the old always-on service and timer,
+then enables the idle relay and on-demand controller. It does not alter or
+reload kernel modules, reboot, or touch Surface 5 files. The GitHub installer
+`--install` updates an already project-owned install without rebuilding
+DKMS; a fresh install builds and registers DKMS, then deploys these services.
+
+To restore the previous camera-service deployment while keeping DKMS,
+firmware, and packages installed:
+
+```sh
+/usr/local/lib/surface7-ubuntu-frontcamera/scripts/rollback.sh --previous-deployment
+```
+
+To remove the project deployment and restore all backed-up system files:
+
+```sh
+/usr/local/lib/surface7-ubuntu-frontcamera/scripts/rollback.sh
+```
+
+The full rollback can restore previous kernel module files; reboot remains a
+manual, separately authorized action.
+
+## Test record
+
+- **Static observer build:** `cc -O2 -Wall -Wextra -Werror` passed. The
+  controller passed Python syntax compilation.
+- **Event observer on the installed always-on node:** WebcamTests.com caused
+  `capture_active: 0 → 1 → 0`; Cheese briefly toggled during startup, then
+  stayed at `1` until its preview closed, returning to `0`. The camera
+  service was left unchanged during those observer checks.
+- **Cheese on the old path:** the isolated temporary GStreamer provider
+  displayed the front camera; Robert confirmed the image was upright. The
+  process logged two non-fatal GStreamer `GST_IS_ELEMENT` critical warnings
+  and libcamera reported that no IPA was found.
+- **Browser site on the old path:** the Codex in-app browser captured
+  1280×720 RGB at 29 FPS, but that preview appeared upside down in that
+  observation. Robert separately reported successful Brave and Opera tests;
+  orientation differed between applications in earlier tests.
+- **Firefox:** no successful Firefox camera preview has been verified by the
+  agent. It previously showed a generic camera-in-use/blocked message.
+- **Always-on stop:** after stopping `surface7-front-camera.service` and
+  disabling its timer, no `gst-launch-1.0` process remained. Robert
+  confirmed the white LED went out. No reboot or module reload was performed.
+- **On-demand relay/controller live test and the Cheese/Firefox/Brave/Opera
+  acceptance matrix:** pending deployment and validation.
+
+## Sources
+
+- [Pinned v4l2loopback source base](source-bases.md)
 - [Linux V4L2 STREAMON/STREAMOFF documentation](https://docs.kernel.org/userspace-api/media/v4l/vidioc-streamon.html)
-  defines those operations as starting/stopping capture or output streaming.
-- [Linux V4L2 event-queue implementation](https://github.com/torvalds/linux/blob/master/drivers/media/v4l2-core/v4l2-event.c#L976-L1058)
-  returns `ENOENT` when a nonblocking event dequeue finds an empty queue; the
-  watcher now treats that as a drained queue.
-- [Upstream loopback capability notes](https://github.com/v4l2loopback/v4l2loopback/blob/main/README.md#options)
-  explain why `exclusive_caps=1` devices can be invisible as cameras before a
-  producer is attached. The `keep_format` control and producer attachment
-  interaction must be tested before selecting idle-device settings.
-
-## Proposed flow
-
-~~~text
-Cheese / Firefox / Brave / Opera requests V4L2 capture
-        |
-        v
-v4l2loopback CLIENT_USAGE event: capture active
-        |
-        v
-controller starts libcamerasrc -> convert/scale -> named FIFO
-        |
-        v
-idle relay reads FIFO -> v4l2loopback -> /dev/video83
-        |
-        v
-client stops capture -> event reports inactive -> grace timer -> stop GStreamer
-~~~
-
-The virtual node must stay discoverable with no producer, and the producer
-must still be able to attach after a client requests capture. That interaction
-is the first design question to resolve. Upstream `exclusive_caps=1` behavior
-changes the advertised V4L2 capability when a producer appears. `keep_format`
-may help preserve the capture format, but it can also affect producer
-attachment. No persistent module or camera configuration is changed until
-this is demonstrated on a disposable test node.
-
-## Idle-node discovery without a continuous black video stream
-
-The current configuration uses `exclusive_caps=1`. With no producer attached,
-v4l2loopback advertises an OUTPUT-only device, which ordinary webcam apps may
-not list. Two idle-device approaches need a controlled comparison:
-
-1. **Retain a negotiated capture format.** Try `keep_format` on a temporary
-   loopback node. Confirm that applications see a CAPTURE device with no
-   producer, then confirm a GStreamer producer can still attach after a real
-   capture request. Upstream documentation and code describe related format
-   behavior, but do not establish that this sequence works for this camera and
-   these clients.
-2. **Keep a tiny idle relay attached.** The vendored upstream bundle has a
-   relay design for this exact exclusive-caps discovery problem. It writes one
-   black YUYV initialization frame so the node is advertised as CAPTURE, then
-   waits for real frames on a named FIFO. It does not generate black frames on
-   a timer. The physical camera can remain off while the relay holds the
-   virtual producer side open. On `CLIENT_USAGE` active, an on-demand GStreamer
-   pipeline would write live `libcamerasrc` frames to the FIFO; after the last
-   inactive event and grace period, that pipeline would stop. The one
-   initialization frame is held in the loopback's memory until live video
-   arrives; it is not written to disk. Applications may briefly see a black
-   initial frame or time out while the sensor starts, so this needs the full
-   desktop/browser test matrix.
-
-The relay approach costs one small idle process, an open loopback device, and
-memory for the retained frame. It avoids a continuously running capture
-pipeline and repeated frame generation. The FIFO should live under a runtime
-directory such as `/run`, not on persistent storage. The unmodified vendor
-relay source is a reference only; this project will keep the vendor snapshot
-unchanged and implement any GStreamer adaptation in a separate prototype.
-
-## Prototype phases
-
-1. **Event observer (tested on the deployed node):** a temporary build ran
-   without sudo against `/dev/video83`. The initial state was inactive;
-   WebcamTests.com produced `0 → 1 → 0`, and Cheese returned to inactive after
-   closing. Cheese had a short `1 → 0 → 1` startup sequence before settling
-   active. The watcher opens the loopback node only to subscribe to its event;
-   it does not stream video. It observes the capture client count, not an
-   application name. The initial build exposed and fixed the empty-queue
-   `ENOENT` case. This validates event delivery only, not on-demand startup or
-   sensor/LED shutdown.
-2. **Idle-node compatibility:** on a separate temporary V4L2 loopback node,
-   compare `keep_format` with the one-frame idle relay. Determine whether
-   Cheese and browsers discover the camera before live frames exist, and
-   whether GStreamer can attach after `STREAMON`. Keep `/dev/video83` and its
-   current producer untouched during this phase.
-3. **On-demand controller:** the initial Python controller is now present. It
-   starts the GStreamer/libcamera source on active capture and stops it after a
-   configurable grace period (2 seconds by default). It expects the idle relay
-   to own `/dev/video83` and the FIFO to exist first. Review and exercise this
-   only after event delivery and FIFO/relay compatibility are confirmed; keep
-   system changes behind the existing backup and rollback protections.
-4. **User-visible acceptance:** with Robert present, test Cheese, Firefox,
-   Brave, Opera, and WebcamTests.com. For each, record camera discovery,
-   actual non-black frames, orientation, LED-on while capturing, and LED-off
-   after the last client stops. Also test two clients, permission denial,
-   abrupt client exit, and application startup latency.
-
-The event observer has now been exercised on the active deployed loopback
-node, but the on-demand controller, idle relay, and producer lifecycle have
-not been tested on the Surface. The controller is not an accepted on-demand
-camera implementation and these checks do not prove that the physical sensor
-or LED turns off. If the `CLIENT_USAGE` event proves unsuitable under the
-planned idle-node configuration, evaluate a minimal DKMS event patch before
-considering a new V4L2 driver.
-
-## Build and later live observation
-
-Build, without installing anything:
-
-~~~sh
-cc -O2 -Wall -Wextra -Werror -o /tmp/surface7-v4l2-client-watch prototypes/v4l2loopback-client-watch.c
-python3 -c 'from pathlib import Path; compile(Path("prototypes/on-demand-gstreamer-controller.py").read_text(), "on-demand-gstreamer-controller.py", "exec")'
-~~~
-
-When Robert is present and the selected device is confirmed to be the
-v4l2loopback camera node:
-
-~~~sh
-/tmp/surface7-v4l2-client-watch /dev/video83
-~~~
-
-Stop with Ctrl-C. This observer is intended to run as the desktop user with
-ordinary access to the video device; do not run Cheese or a browser through
-`sudo`. The active always-on producer remains untouched during the first event
-check. Switching to an idle sensor or testing module settings requires an
-explicit rollback plan and the user's elevated tmux session.
-
-The controller can be invoked only after a disposable idle relay is running
-and the named FIFO exists. For a manual prototype session, source the checked
-in camera settings and pass them explicitly:
-
-~~~sh
-source config/front-camera.env
-python3 prototypes/on-demand-gstreamer-controller.py --watcher /tmp/surface7-v4l2-client-watch --device "$DEVICE" --fifo /run/surface7-ubuntu-frontcamera/front.fifo --camera-name "$CAMERA_NAME" --source-width "$SOURCE_WIDTH" --source-height "$SOURCE_HEIGHT" --source-fps-num "$SOURCE_FPS_NUM" --source-fps-den "$SOURCE_FPS_DEN" --output-width "$OUTPUT_WIDTH" --output-height "$OUTPUT_HEIGHT" --output-fps-num "$OUTPUT_FPS_NUM" --output-fps-den "$OUTPUT_FPS_DEN"
-~~~
-
-This command is an example for a later, supervised runtime test. It is not a
-deployment command and cannot work until a relay has created and opened the
-FIFO. No systemd unit or host configuration is included in this prototype.
-
-## Baseline application checks (6 October 2026)
-
-These checks exercise the currently deployed camera path, not the on-demand
-prototype above.
-
-- **WebcamTests.com in the Codex in-app browser:** the site detected
-  `Surface Pro 7 Front Camera`; its test completed successfully at 1280×720,
-  RGB, 29 FPS. The live preview was visibly upside down. This was the in-app
-  Chromium-based browser only; it does not establish results for Brave, Opera,
-  or Firefox.
-- **Cheese:** `scripts/run-cheese-with-provider.sh` built and launched its
-  temporary, process-scoped GStreamer provider. Robert confirmed that Cheese
-  displayed the camera upright and working. Startup emitted two
-  `GST_IS_ELEMENT` critical warnings and libcamera reported no IPA found;
-  they did not prevent the preview.
-- The browser capture was stopped in the page and Cheese was closed with
-  Ctrl-C. No Cheese process remained afterward. The
-  `surface7-front-camera.service` was still active, so these checks do not
-  prove that the physical sensor or white LED turns off when applications
-  close. No LED-off observation was made.
-- No package, service, module, or persistent plugin was changed during these
-  checks. The browser test did not include a controlled moving-frame
-  acceptance check. The on-demand event watcher, relay, and controller remain
-  untested on the Surface hardware.
-
-## Rollback boundary
-
-The files on this branch are not deployed. Removing the observer binary and
-ending the controller/watcher processes restores their entire local effect.
-The running camera service, module configuration, loaded kernel modules,
-packages, and system files remain unchanged. Any later controller or
-device-configuration change must first be covered by `scripts/rollback.sh`,
-and this branch must remain experimental until all four applications and the
-LED behavior pass live tests.
+- [v4l2loopback v0.15.4 event implementation](https://github.com/v4l2loopback/v4l2loopback/blob/v0.15.4/v4l2loopback.c)
+- [Linux V4L2 event queue](https://github.com/torvalds/linux/blob/master/drivers/media/v4l2-core/v4l2-event.c#L976-L1058)
