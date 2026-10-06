@@ -112,8 +112,8 @@ driver.
 Build, without installing anything:
 
 ~~~sh
-cc -O2 -Wall -Wextra -Werror \\
-  -o /tmp/surface7-v4l2-client-watch \\
+cc -O2 -Wall -Wextra -Werror \
+  -o /tmp/surface7-v4l2-client-watch \
   prototypes/v4l2loopback-client-watch.c
 ~~~
 
