@@ -16,10 +16,12 @@ was upright. The currently installed always-on systemd service has since been
 stopped, its boot timer disabled, and Robert confirmed the white camera LED
 went out; no reboot or module reload was needed.
 
-The relay/controller deployment and full desktop/browser acceptance tests are
-still pending. Do not describe the on-demand implementation as validated until
-the new services produce moving frames and stop the physical GStreamer
-pipeline after capture in the user-facing tests.
+The relay/controller is deployed. Its first browser capture request
+reached the watcher and controller, but GStreamer exited before producing a
+live frame because the maintained command passed `ae-enable=true`, a property
+not supported by this host's installed `libcamerasrc`. The corrected source
+removes the unsupported property. Re-deploy and repeat live frame and stop
+tests before calling this implementation validated.
 
 ## Why on-demand
 
@@ -87,8 +89,9 @@ not saved to disk. The relay process uses little idle CPU and memory; it does
 not continuously generate frames. It owns the V4L2 producer side so
 `exclusive_caps=1` continues to expose the node as a capture camera.
 
-The controller starts GStreamer with the already documented camera name,
-source mode, automatic exposure, and output size. It sends YUYV to the FIFO,
+The controller starts GStreamer with the configured camera name, source mode,
+and output size. It relies on libcamera's default exposure behavior and sends
+YUYV to the FIFO,
 and never writes captured images to persistent storage. The small two-second
 grace period prevents rapid camera power cycling during app startup or brief
 stream interruptions.
@@ -146,8 +149,18 @@ manual, separately authorized action.
 - **Always-on stop:** after stopping `surface7-front-camera.service` and
   disabling its timer, no `gst-launch-1.0` process remained. Robert
   confirmed the white LED went out. No reboot or module reload was performed.
-- **On-demand relay/controller live test and the Cheese/Firefox/Brave/Opera
-  acceptance matrix:** pending deployment and validation.
+- **First on-demand request:** the internal browser's capture request reached
+  the watcher/controller. GStreamer exited immediately with
+  `no property "ae-enable" in element "libcamerasrc"`; no live image was
+  established from this request. The repository removes that option, but the
+  corrected version still needs deployment and live validation.
+- **Migration helper issue:** the first install could not copy the persistent
+  rollback helper because `$SURFACE7_LIBDIR/scripts` did not exist. The
+  deployment continued, while the one-time previous-deployment snapshot was
+  present. Follow-up changes create the directory, propagate failures into
+  rollback, and restart the controller after code updates.
+- **Cheese, Firefox, Brave, Opera and WebcamTests.com on the corrected
+  on-demand controller:** pending successful recapture and idle-stop testing.
 
 ## Sources
 
