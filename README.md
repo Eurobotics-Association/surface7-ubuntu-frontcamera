@@ -1,4 +1,4 @@
-Updated: 6 October 2026, 23:40 CEST
+Updated: 6 October 2026, 23:50 CEST
 
 # Surface Pro 7 front camera on Ubuntu
 
@@ -16,7 +16,7 @@ The GitHub installer checks the device, Ubuntu release, running kernel, matching
 
 The experimental on-demand design is deployed. It keeps /dev/video83 discoverable using a low-activity relay with one initialization frame; it does not send black frames continuously. The physical camera pipeline starts when a client requests capture and stops after the client releases it.
 
-Robert reports that WebcamTests.com eventually showed live video after three attempts: RGB 1280×720 at 29 FPS, labeled “Surface Pro 7 Front Camera.” The camera source started and stopped during the retries. After the successful session, closing the browser tab stopped the source and the white camera LED went out. This confirms one working browser session and idle release, while the repeated starts remain an open reliability issue.
+Robert reports that WebcamTests.com eventually showed live video: RGB 1280×720 at 29 FPS. The page's camera entry changed after permission approval, it asked for approval again, and the stream stopped and restarted automatically. The label then changed to “Surface Pro 7 Front Camera” and stable frames appeared. Robert did not manually retry; the page's device/permission/startup sequence cycled on its own. Closing the successful tab stopped the source and white LED. The cause of the identity/prompt transitions is unresolved, and Teams/Google Meet have not been tested.
 
 The latest Cheese attempt did not discover the synthetic camera. Cheese is not accepted yet. Firefox has not been retested against the current on-demand deployment; previous attempts failed. Brave and Opera worked in earlier user tests, but must be retested on this deployment before they are called current passes. Image orientation has differed between clients, so no global rotation is applied. See the [handoff and acceptance record](docs/handoff-current.md), [detailed on-demand investigation](docs/on-demand-v4l2-prototype.md), and [test log](docs/testing.md).
 

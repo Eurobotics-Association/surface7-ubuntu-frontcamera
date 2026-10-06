@@ -1,12 +1,12 @@
 # Camera testing and acceptance
 
-Updated: 6 October 2026, 23:40 CEST
+Updated: 6 October 2026, 23:50 CEST
 
 ## Current deployment and result
 
 The experimental on-demand services are installed on Robert's Surface Pro 7. The old always-on camera service and timer are stopped/disabled. The idle relay keeps /dev/video83 discoverable with one retained initialization frame; the physical GStreamer/libcamera pipeline starts on a V4L2 capture request and stops after capture becomes idle. The relay does not emit repeating black frames.
 
-Robert confirmed the white camera LED went out after the old continuous service was stopped. In the latest on-demand browser test, he reports that WebcamTests.com eventually showed live video and reported RGB, 1280×720, 29 FPS, and “Surface Pro 7 Front Camera.” It took three attempts; the feed started and stopped between attempts. After the successful session, closing the tab stopped the feed and the LED went out. The host service journal showed multiple capture sessions during the browser sequence. This verifies one successful browser session and idle release, not stable first-try startup.
+Robert confirmed the white camera LED went out after the old continuous service was stopped. In the latest on-demand WebcamTests.com session, he reports live RGB 1280×720 video at 29 FPS. He did not manually retry. The page initially listed one camera name; after permission approval it showed another name, requested approval again despite the approval just granted, stopped the stream, and restarted it automatically. The page then changed the selected label to “Surface Pro 7 Front Camera” and stable video appeared. The service journal showed multiple capture sessions, consistent with the observed automatic transitions. Closing the successful tab stopped the feed and LED. This confirms one eventual browser success and idle release; the cause of the device/permission churn and its startup smoothness remain unresolved.
 
 The latest Cheese attempt did not discover the synthetic camera. An earlier isolated-provider Cheese run showed a preview, but that result does not establish reliable discovery in the current deployment. Firefox has not been retested on the current on-demand services; earlier tests failed. Robert previously reported Brave and Opera working with the earlier camera service. Those reports do not yet establish current on-demand compatibility.
 
@@ -14,7 +14,7 @@ The latest Cheese attempt did not discover the synthetic camera. An earlier isol
 
 | Client/path | Current result | Evidence and limits |
 | --- | --- | --- |
-| WebcamTests.com | User-reported success after three attempts; RGB 1280×720 at 29 FPS. | Feed started/stopped during retries. Closing the successful tab stopped capture and the LED went out. First-try reliability is unresolved. |
+| WebcamTests.com | User-reported eventual success; RGB 1280×720 at 29 FPS. | The page changed the camera name after approval, requested approval again, stopped/restarted capture automatically, then settled on “Surface Pro 7 Front Camera.” Robert did not manually retry. Closing the tab stopped capture and the LED. Root cause remains unresolved. |
 | Cheese | Current user-reported failure: synthetic camera not discovered. | An earlier isolated GStreamer-provider preview worked once. Treat Cheese as unresolved until the current command reliably discovers the camera and displays moving frames. |
 | Firefox | Not retested against the current on-demand deployment; earlier attempt failed. | Previous page showed a generic “in use or blocked” message. Exact WebRTC error remains unknown. |
 | Brave | User previously reported a live image on the earlier service. | Must be retested with the current on-demand deployment. |
@@ -24,7 +24,7 @@ The latest Cheese attempt did not discover the synthetic camera. An earlier isol
 
 Orientation reports have differed across applications and test sessions. The direct V4L2 sample was upright; some browser/desktop previews appeared inverted while Brave and Opera had earlier looked correct. No global image flip has been applied. Recheck and record orientation per client after its live stream is stable.
 
-The device label reportedly changed during the browser permission/retry flow. Media Capture devices can have restricted or empty labels before permission is granted and expose labels after permission; this is a plausible explanation, not a diagnosis of the retry sequence. See the [W3C Media Capture and Streams specification](https://www.w3.org/TR/mediacapture-streams/).
+The device label changed during the browser permission flow. Media Capture can restrict labels before permission is granted, which could explain a newly readable label after consent. It does not by itself explain the second approval prompt, stream stop/restart, or final label switch. Browser console/WebRTC logs and exact device IDs were not captured, so the cause is unknown. See the [W3C Media Capture and Streams specification](https://www.w3.org/TR/mediacapture-streams/).
 
 ## Deployment and rollback audit
 
@@ -60,9 +60,9 @@ Cheese has a separate GStreamer discovery issue. Ordinary gst-device-monitor-1.0
 
 1. Test Cheese alone. Confirm whether ordinary discovery lists /dev/video83; if not, use the isolated provider script and capture Cheese/GStreamer logs. Verify the selected source is the synthetic Surface camera, then confirm moving frames and orientation. Keep any provider process-scoped until it passes repeatable tests.
 2. Test WebcamTests.com in one browser at a time. Close all other camera clients, grant permission, wait for stable frames, note source transitions, then close the tab and verify that capture and the LED stop.
-3. Repeat the same controlled test in Brave and Opera on the current deployment; then test Firefox alone and record its exact selected device and failure.
+3. Repeat the controlled test in Brave and Opera on the current deployment; then test Firefox alone and record its exact selected device and failure. Capture browser console/devicechange and WebRTC logs across permission approval to determine whether the page or device enumeration is switching identities.
 4. Record orientation separately for each app. Do not rotate the shared source to correct a single application's display.
-5. Keep the deployment experimental until these checks are repeatable. Do not reboot or reload camera modules without explicit authorization; before any reboot, broadcast the two-minute all-user warning and wait the full interval.
+5. Test Teams and Google Meet separately after the basic clients are stable; their compatibility is currently unknown. Keep the deployment experimental until checks are repeatable. Do not reboot or reload camera modules without explicit authorization; before any reboot, broadcast the two-minute all-user warning and wait the full interval.
 
 ## Historical investigation
 
