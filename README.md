@@ -1,76 +1,71 @@
-Updated: 6 October 2026, 03:18 CEST
+Updated: 6 October 2026, 22:40 CEST
 
 # Surface Pro 7 front camera on Ubuntu
 
 ## Quick install
 
-For a fresh install on Ubuntu 24.04 x86_64 running on Microsoft Surface Pro 7, run:
+For Ubuntu 24.04 x86_64 on a Microsoft Surface Pro 7, run:
 
 ~~~sh
 curl -fsSL https://raw.githubusercontent.com/Eurobotics-Association/surface7-ubuntu-frontcamera/main/scripts/install-from-github.sh | bash -s -- --install
 ~~~
 
-The installer checks and installs required Ubuntu packages through APT, builds the camera modules for the running kernel, and deploys the experimental GStreamer camera stack. It asks for sudo when needed. Review the repository and rollback instructions before installing; do not use this fresh-install command to upgrade an existing deployment.
+The installer checks the OS, running kernel, matching headers, and required packages; it installs missing Ubuntu packages through APT and asks for sudo when needed. A fresh installation builds/registers the kernel support with DKMS and deploys the on-demand GStreamer services. On an existing project-owned installation, the same command verifies ownership and the running-kernel record, then updates the service design without rebuilding DKMS. It does not reboot.
 
-This repository adapts the Surface Pro 7 IPU4P camera stack for Ubuntu 24.04 and a GStreamer capture service for the front RGB camera. The installed GStreamer path has produced viewable, visibly moving frames through `/dev/video83`, and the deployment's rollback path has been exercised. WebcamTests.com has shown live video in Brave and Opera at about 29 FPS and 1280 × 720 RGB. Firefox reports that the camera is in use or blocked, and Cheese currently reports no camera. These app-level failures remain unresolved. The bridge runs continuously, so the front-camera LED stays lit while the service is active even if no app is viewing its output. Support remains experimental while Firefox and Cheese compatibility, image quality, and reboot/kernel-upgrade persistence are checked. The 6 October GStreamer probes show the default monitor omits /dev/video83. The repository now includes an opt-in scoped provider: its checked-in source enumerated the labeled loopback and read five buffers on the Surface, with two non-fatal V4L2 GStreamer critical warnings that also reproduce with the plugin unloaded. It is not installed or integrated into the automatic installer; no image was saved or visually assessed in that test. Cheese and Firefox remain unresolved.
+If the camera kernel modules were just installed and `/dev/video83` is not present yet, the services are enabled for the next boot but are not started. Reboot only when you are ready and follow the system-wide two-minute warning instruction in `AGENTS.md`.
 
-## Current target and status
+## Camera and privacy behavior
 
-The host is running Ubuntu's latest installed HWE generic kernel; the out-of-tree camera modules are registered with DKMS for the running kernel and another installed kernel with matching headers. The rollback-safe installer is deployed, including the pinned OV5693 simple-IPA tuning file and persistent `max_buffers=4` loopback setting. The camera bridge runs continuously and keeps the front-camera LED lit even when no desktop app is open. User testing confirms browser capture in Brave and Opera at 29 FPS, RGB, 1280 × 720 (0.92 MP), but Firefox reports a generic in-use/blocked error and Cheese sees no camera. Current diagnostics show the default GStreamer device monitor omits `/dev/video83`, while `--include-hidden` exposes it, and a default MMAP reader fails to allocate buffers while `io-mode=rw` succeeds. A still JPEG captured through the read/write path contains visible scene pixels. Cheese discovery and Firefox WebRTC compatibility remain unresolved. The latest images were captured in low light, so normal-light image quality remains unassessed. No reboot was performed; boot-time and later kernel-upgrade behavior remain unverified. The one-time `iommu=pt` diagnostic setting is not a proven fix and remains active only for the current boot. See the [DKMS and kernel plan](docs/dkms-plan.md), [test record](docs/testing.md), and [dated investigation log](docs/front-camera-investigation-2026-10-05.md).
+The physical image path uses GStreamer with libcamera's `libcamerasrc`, then writes YUYV frames through a FIFO into v4l2loopback at `/dev/video83`. PipeWire camera sources, SPA plugins, and WirePlumber camera rules are not used.
 
-## Camera path
+The V4L2 device remains discoverable while idle. A small relay writes one initialization frame and then waits on the FIFO; it does not generate black frames repeatedly. When an application starts capture, the kernel's v4l2loopback `CLIENT_USAGE` event starts the physical GStreamer pipeline. After capture becomes idle for the two-second grace period, the pipeline stops. Only the relay and event watcher remain running while idle.
 
-~~~text
-OV5693 front RGB sensor -> Intel IPU4P -> libcamera SimplePipeline / SoftISP
--> GStreamer libcamerasrc -> video conversion/scaling -> v4l2loopback /dev/video83
+Robert confirmed that stopping the previous always-on service extinguished the white front-camera LED without a reboot. The new on-demand service transition is still experimental until its real capture/stop behavior and app matrix pass on the Surface.
+
+## Current validation
+
+Earlier tests produced a live 1280×720 RGB stream at about 29 FPS in the Codex in-app WebcamTests page. Cheese also displayed an upright preview using the isolated GStreamer provider; its launch emitted non-fatal GStreamer critical warnings. Browser orientation has varied between applications and must be checked again on the new service.
+
+The agent has not verified the new on-demand relay/controller against Cheese, Firefox, Brave, Opera, or WebcamTests.com after deployment. See [the on-demand investigation and test record](docs/on-demand-v4l2-prototype.md) and [the general test log](docs/testing.md). Do not infer live capture from module load, device enumeration, or a successful build.
+
+## Install, update, and inspect
+
+The one-line command above supports fresh installation and updating an existing project-owned installation. From a checked-out repository, the service update can also be run with:
+
+~~~sh
+./scripts/install.sh --deploy-services
 ~~~
 
-The design uses GStreamer and libcamera's `libcamerasrc`. It does not use a PipeWire camera source, SPA plugin, or WirePlumber camera rule. The system timer is enabled to start the bridge after delayed IPU4 initialization; it has not been exercised across a reboot. Treat the privacy indicator as active whenever a capture is running.
-
-## Status and diagnostics
-
-Use these read-only checks to inspect the host:
+Inspect current services and devices with:
 
 ~~~sh
 ./scripts/check-system.sh
 ./scripts/status.sh
+systemctl status surface7-front-camera-idle-relay.service surface7-front-camera-on-demand.service
 ~~~
 
-After an existing deployment, update only the systemd units with:
-
-~~~sh
-bash ./scripts/deploy-services.sh
-~~~
-
-This checks the ownership marker, backs up unit files and their original enabled states once, enables the 60-second boot timer, and disables direct boot activation. It leaves an already-running camera process alone; the change takes effect on the next boot. Use the normal rollback command to restore the saved service state.
-
-The deployed stack is still under validation. Do not treat a successful DKMS build, loaded modules, or `/dev/media0` alone as proof that the camera works. Moving, non-black frames from `/dev/video83` are verified. Firefox and Cheese compatibility, image quality, and persistence after reboot and a later kernel update remain open acceptance items.
+The old always-on unit and its timer are removed during migration. The new services are enabled at boot; the physical camera pipeline remains stopped until a capture request arrives.
 
 ## Rollback
 
-Installations made from this revision place a self-contained rollback helper in the product directory before deploying system files. This path works after the one-line GitHub installer has cleaned up its temporary checkout:
+Restore the previous camera-service setup while keeping DKMS modules, firmware, and packages installed:
+
+~~~sh
+/usr/local/lib/surface7-ubuntu-frontcamera/scripts/rollback.sh --previous-deployment
+~~~
+
+Remove the project deployment and restore saved system files:
 
 ~~~sh
 /usr/local/lib/surface7-ubuntu-frontcamera/scripts/rollback.sh
 ~~~
 
-If you installed from a local clone, the checkout's copy also works:
+The rollback scripts stop camera services before restoring files. A full rollback can restore older kernel-module files and may require a later manual reboot; the script never reboots automatically. Backups are kept under `/var/lib/surface7-ubuntu-frontcamera/backup`.
 
-~~~sh
-./scripts/rollback.sh
-~~~
+## Project scope
 
-Installations made before this helper was added should use the rollback script from their local repository checkout.
-
-If deployment fails, the GitHub installer keeps its temporary source checkout and prints its rollback path. Rollback verifies the ownership marker, stops and disables the camera services, restores saved files and modules, removes product-scoped files, and refreshes the module and dynamic linker databases. APT packages remain installed.
-
-## Repository contents
-
-- `upstream/surface-pro-7-camera/` — pinned vendor source, kept unchanged.
-- `scripts/prepare-upstream-installer.py` — checksum-checked Ubuntu adaptations to a temporary copy.
-- `scripts/install-build-deps.sh` — checks and installs Ubuntu build and GStreamer packages.
-- `scripts/install.sh` — checks required Ubuntu packages, selects the running Ubuntu kernel, and deploys the experimental stack through DKMS.
-- `scripts/rollback.sh` — ownership-checked restoration of replaced system state.
-- `docs/` — research, evidence, rollback behavior, and the proposed kernel/DKMS plan.
-
-The front IR camera is outside this repository's scope. Surface 5 files are not used or modified.
+- Target: Microsoft Surface Pro 7 (not 7+) with Ubuntu 24.04 x86_64 and the running Ubuntu HWE kernel.
+- `upstream/surface-pro-7-camera/` is a pinned vendor source snapshot and remains unmodified.
+- All packages are installed from Ubuntu APT repositories.
+- The front IR camera is outside this repository's scope.
+- Surface 5 files and checkouts are not used or modified.
