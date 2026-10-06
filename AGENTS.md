@@ -29,6 +29,12 @@
 - The user reports that the Surface fan may not engage when needed. Investigate thermal sensors, cooling devices, fan reporting, and relevant Ubuntu/kernel services separately; start with read-only diagnostics and do not change fan controls or install thermal-management software without an approved plan.
 - Thermal handling during compile/testing: continue at readings up to and including 95°C. If any observed reading is above 95°C, pause heavy work for 3 minutes, then resume while continuing to monitor. The user says the firmware will vent the heat; no permanent stop is required at that threshold.
 
+## GStreamer desktop discovery status — 6 October 2026
+
+- The ordinary GStreamer monitor omits the Surface loopback because the default V4L2 provider is hidden by the installed libcamera provider. A process-local interposition probe confirmed this behavior.
+- Do not globally unhide the V4L2 provider or deploy the temporary LD_PRELOAD shim: it also exposes raw IPU camera endpoints.
+- A temporary scoped provider prototype exposed only the labeled Surface loopback and its v4l2src io-mode=rw path read five frames, but the provider-created capture test emitted GStreamer critical warnings from the V4L2 plugin. The prototype is not installed or committed. Resolve the warnings and test Cheese in the user's desktop session before packaging or claiming app support.
+
 ## Source and validation
 
 - Record source commits, firmware checksum, forum references, Ubuntu package names, and camera-test results in the documentation.
