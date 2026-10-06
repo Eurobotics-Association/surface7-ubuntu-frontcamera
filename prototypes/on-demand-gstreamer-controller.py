@@ -21,7 +21,7 @@ import time
 from pathlib import Path
 
 
-EVENT_RE = re.compile(rb"capture_clients=([0-9]+)")
+EVENT_RE = re.compile(rb"capture_active=([01])")
 SOURCE_MODES = {
     "source-width": "SOURCE_WIDTH",
     "source-height": "SOURCE_HEIGHT",
@@ -206,7 +206,7 @@ def main() -> int:
                     if match is None:
                         continue
 
-                    capture_active = int(match.group(1)) > 0
+                    capture_active = match.group(1) == b"1"
                     if capture_active:
                         stop_deadline = None
                         if gst_process is None or gst_process.poll() is not None:
