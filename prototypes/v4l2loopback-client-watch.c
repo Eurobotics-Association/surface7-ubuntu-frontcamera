@@ -42,18 +42,19 @@ static long long monotonic_ms(void)
 
 static int print_client_usage_event(const struct v4l2_event *event)
 {
-    uint32_t active = 0;
+    uint32_t clients = 0;
 
     if (event->type != V4L2_EVENT_PRI_CLIENT_USAGE)
         return 0;
 
-    memcpy(&active, event->u.data, sizeof(active));
-    if (active > 1U) {
-        fprintf(stderr, "unexpected CLIENT_USAGE state: %u\n", active);
-        return -1;
-    }
-
-    printf("%lld ms capture_active=%u\n", monotonic_ms(), active);
+    /*
+     * v4l2loopback reports the number of active capture clients. A value
+     * greater than one is valid when, for example, Cheese and a browser are
+     * open at the same time.
+     */
+    memcpy(&clients, event->u.data, sizeof(clients));
+    printf("%lld ms capture_clients=%u capture_active=%u\n",
+           monotonic_ms(), clients, clients > 0U ? 1U : 0U);
     fflush(stdout);
     return 0;
 }
