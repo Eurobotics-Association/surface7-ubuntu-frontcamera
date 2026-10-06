@@ -11,26 +11,23 @@ LED went out. There is no camera GStreamer process running. The virtual
 `/dev/video83` node and loaded camera modules remain present. No reboot,
 module reload, or package operation was needed to stop the feed.
 
-The first on-demand deployment is now active on the host: the idle relay
-and event controller run, while the old always-on service and timer are
-inactive. At idle, no physical `gst-launch-1.0` process is running. The relay
-logs one initialization frame and then waits on its FIFO.
+The on-demand relay and event controller are installed. The old always-on
+service is stopped and its boot timer is disabled. The physical capture process
+is stopped at idle, and Robert has confirmed the front-camera LED is now off.
 
-During the first browser capture attempt, the event watcher reported capture
-active and the controller launched GStreamer, but the pipeline exited before
-producing a live image: the installed `libcamerasrc` rejects the
-`ae-enable` property. `gst-inspect-1.0 libcamerasrc` lists
-`camera-name` and `auto-focus-mode`, but no `ae-enable`. The corrected
-repository pipelines remove that unsupported property; the host needs the
-merged update and another capture test before on-demand behavior can be
-validated.
+Two capture failures have been isolated and recorded. The first pipeline used
+an unsupported `ae-enable` property; PR #14 removed it. The next attempt loaded
+Ubuntu's stock `libcamerasrc` 0.2.0 because the on-demand systemd unit did not
+select the product-built plugin. That plugin could not enumerate the camera,
+although the OV5693 sensor and enabled media link were present in the kernel
+media graph. The old always-on unit had selected the product plugin from
+`/usr/local/lib/surface7-ubuntu-frontcamera/gstreamer-1.0`.
 
-The initial service migration also printed an error while copying the
-persistent rollback helper because its parent `scripts/` directory was
-missing. Service activation continued. The one-time pre-transition snapshot
-was created successfully. A follow-up hardens error handling, creates the
-helper directory, and restarts the controller on redeploy; reinstall it from
-`main` before further client acceptance testing.
+The current branch selects that same product plugin in the on-demand unit,
+uses a fresh GStreamer registry under `/run/surface7-ubuntu-frontcamera`, and
+adds a deployment preflight that verifies the plugin can load. This fix still
+needs merge, installation from `main`, and a new live-frame/idle-stop test.
+No successful image has yet been produced through the on-demand controller.
 
 ## Evidence from the previous GStreamer service
 

@@ -156,6 +156,13 @@ if grep -Fq 'ae-enable=true' "$ROOT/prototypes/on-demand-gstreamer-controller.py
     echo "GStreamer pipeline uses an unsupported libcamerasrc property." >&2
     exit 1
 fi
+grep -Fq 'Environment=GST_PLUGIN_PATH=/usr/local/lib/surface7-ubuntu-frontcamera/gstreamer-1.0' \
+    "$ROOT/systemd/system/surface7-front-camera-on-demand.service"
+grep -Fq 'Environment=GST_REGISTRY=/run/surface7-ubuntu-frontcamera/gstreamer-registry.bin' \
+    "$ROOT/systemd/system/surface7-front-camera-on-demand.service"
+grep -Fq 'GST_PLUGIN_PATH="$gstreamer_plugin_dir"' "$ROOT/scripts/deploy-services.sh"
+grep -Fq 'GST_REGISTRY="$tmp/gstreamer-registry.bin"' "$ROOT/scripts/deploy-services.sh"
+grep -Fq 'libgstlibcamera.so' "$ROOT/scripts/deploy-services.sh"
 grep -Fq 'single initialization frame' "$ROOT/docs/on-demand-v4l2-prototype.md"
 grep -Fq 'BindsTo=surface7-front-camera-idle-relay.service' \
     "$ROOT/systemd/system/surface7-front-camera-on-demand.service"
