@@ -42,19 +42,23 @@ static long long monotonic_ms(void)
 
 static int print_client_usage_event(const struct v4l2_event *event)
 {
-    uint32_t clients = 0;
+    uint32_t active = 0;
 
     if (event->type != V4L2_EVENT_PRI_CLIENT_USAGE)
         return 0;
 
     /*
-     * v4l2loopback reports the number of active capture clients. A value
-     * greater than one is valid when, for example, Cheese and a browser are
-     * open at the same time.
+     * v4l2loopback 0.15.4 sends a Boolean: 1 after the capture token is
+     * acquired, 0 after it is released. This is a stream-active flag, not
+     * an application or client count.
      */
-    memcpy(&clients, event->u.data, sizeof(clients));
-    printf("%lld ms capture_clients=%u capture_active=%u\n",
-           monotonic_ms(), clients, clients > 0U ? 1U : 0U);
+    memcpy(&active, event->u.data, sizeof(active));
+    if (active > 1U) {
+        fprintf(stderr, "unexpected CLIENT_USAGE state: %u\n", active);
+        return -1;
+    }
+
+    printf("%lld ms capture_active=%u\n", monotonic_ms(), active);
     fflush(stdout);
     return 0;
 }
