@@ -1,4 +1,4 @@
-Updated: 6 October 2026, 00:06 CEST
+Updated: 6 October 2026, 02:52 CEST
 
 # Surface Pro 7 front camera on Ubuntu
 
@@ -12,7 +12,7 @@ curl -fsSL https://raw.githubusercontent.com/Eurobotics-Association/surface7-ubu
 
 The installer checks and installs required Ubuntu packages through APT, builds the camera modules for the running kernel, and deploys the experimental GStreamer camera stack. It asks for sudo when needed. Review the repository and rollback instructions before installing; do not use this fresh-install command to upgrade an existing deployment.
 
-This repository adapts the Surface Pro 7 IPU4P camera stack for Ubuntu 24.04 and a GStreamer capture service for the front RGB camera. The installed GStreamer path has produced viewable, visibly moving frames through `/dev/video83`, and the deployment's rollback path has been exercised. WebcamTests.com has shown live video in Brave and Opera at about 29 FPS and 1280 × 720 RGB. Firefox reports that the camera is in use or blocked, and Cheese currently reports no camera. These app-level failures remain unresolved. The bridge runs continuously, so the front-camera LED stays lit while the service is active even if no app is viewing its output. Support remains experimental while Firefox and Cheese compatibility, image quality, and reboot/kernel-upgrade persistence are checked.
+This repository adapts the Surface Pro 7 IPU4P camera stack for Ubuntu 24.04 and a GStreamer capture service for the front RGB camera. The installed GStreamer path has produced viewable, visibly moving frames through `/dev/video83`, and the deployment's rollback path has been exercised. WebcamTests.com has shown live video in Brave and Opera at about 29 FPS and 1280 × 720 RGB. Firefox reports that the camera is in use or blocked, and Cheese currently reports no camera. These app-level failures remain unresolved. The bridge runs continuously, so the front-camera LED stays lit while the service is active even if no app is viewing its output. Support remains experimental while Firefox and Cheese compatibility, image quality, and reboot/kernel-upgrade persistence are checked. The 6 October GStreamer probes confirmed provider hiding suppresses /dev/video83 from the ordinary monitor. A temporary scoped provider listed it and its provider-created pipeline read five frames, but logged two V4L2 GStreamer critical warnings. The prototype is not installed; Cheese and Firefox remain unresolved.
 
 ## Current target and status
 
