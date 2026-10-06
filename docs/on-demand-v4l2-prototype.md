@@ -180,6 +180,31 @@ This command is an example for a later, supervised runtime test. It is not a
 deployment command and cannot work until a relay has created and opened the
 FIFO. No systemd unit or host configuration is included in this prototype.
 
+## Baseline application checks (6 October 2026)
+
+These checks exercise the currently deployed camera path, not the on-demand
+prototype above.
+
+- **WebcamTests.com in the Codex in-app browser:** the site detected
+  `Surface Pro 7 Front Camera`; its test completed successfully at 1280×720,
+  RGB, 29 FPS. The live preview was visibly upside down. This was the in-app
+  Chromium-based browser only; it does not establish results for Brave, Opera,
+  or Firefox.
+- **Cheese:** `scripts/run-cheese-with-provider.sh` built and launched its
+  temporary, process-scoped GStreamer provider. Robert confirmed that Cheese
+  displayed the camera upright and working. Startup emitted two
+  `GST_IS_ELEMENT` critical warnings and libcamera reported no IPA found;
+  they did not prevent the preview.
+- The browser capture was stopped in the page and Cheese was closed with
+  Ctrl-C. No Cheese process remained afterward. The
+  `surface7-front-camera.service` was still active, so these checks do not
+  prove that the physical sensor or white LED turns off when applications
+  close. No LED-off observation was made.
+- No package, service, module, or persistent plugin was changed during these
+  checks. The browser test did not include a controlled moving-frame
+  acceptance check. The on-demand event watcher, relay, and controller remain
+  untested on the Surface hardware.
+
 ## Rollback boundary
 
 The files on this branch are not deployed. Removing the observer binary and
