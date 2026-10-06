@@ -49,6 +49,7 @@ cc -O2 -Wall -Wextra -Werror -o "$tmp/surface7-v4l2-idle-relay" \
 python3 -c 'from pathlib import Path; compile(Path("'"$ROOT"'/prototypes/on-demand-gstreamer-controller.py").read_text(), "on-demand-gstreamer-controller.py", "exec")'
 
 backup_root="$SURFACE7_BACKUP_ROOT/$deployed_kernel"
+sudo install -d -m 0755 "$backup_root/systemd-state"
 previous="$backup_root/pre-on-demand"
 state_units=(
     surface7-front-camera.service
@@ -84,7 +85,7 @@ snapshot_previous_deployment_once() {
     if sudo test -f "$previous/.complete"; then
         return
     fi
-    sudo install -d -m 0755 "$previous"
+    sudo install -d -m 0755 "$previous/systemd-state" "$previous/systemd-active"
     for path in "${system_files[@]}"; do
         local saved="$previous$path"
         if sudo test -e "$path" || sudo test -L "$path"; then
@@ -155,12 +156,15 @@ install_and_activate() {
     fi
 }
 
-if ! install_and_activate; then
-    restore_previous_and_exit "$?"
+if install_and_activate; then
+    :
+else
+    status=$?
+    restore_previous_and_exit "$status"
 fi
 
 sleep 2
-if pgrep -af 'gst-launch-1.0.*libcamerasrc' | grep -v 'pgrep -af' >/dev/null; then
+if pgrep -x 'gst-launch-1.0' >/dev/null 2>&1; then
     echo "A physical camera pipeline is active; check client usage before treating the camera as idle."
 else
     echo "No libcamerasrc process is running while the V4L2 node is idle."
