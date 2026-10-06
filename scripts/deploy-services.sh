@@ -14,7 +14,7 @@ fi
 
 command -v cc >/dev/null 2>&1 || { echo "C compiler is missing; run scripts/install-build-deps.sh." >&2; exit 1; }
 command -v gst-launch-1.0 >/dev/null 2>&1 || { echo "gst-launch-1.0 is missing; install the repository's Ubuntu packages first." >&2; exit 1; }
-gst-inspect-1.0 libcamerasrc >/dev/null 2>&1 || { echo "GStreamer libcamerasrc is missing; the physical camera pipeline cannot start." >&2; exit 1; }
+command -v gst-inspect-1.0 >/dev/null 2>&1 || { echo "gst-inspect-1.0 is missing; install the repository's Ubuntu packages first." >&2; exit 1; }
 [[ -f "$ROOT/upstream/surface-pro-7-camera/src/sp7-camera-relay.c" ]] || { echo "Pinned idle-relay source is missing." >&2; exit 1; }
 [[ "$(uname -r)" == "$SURFACE7_TARGET_KERNEL" ]] || {
     echo "Running kernel $(uname -r) differs from configured target $SURFACE7_TARGET_KERNEL." >&2
@@ -43,6 +43,18 @@ fi
 tmp="$(mktemp -d -t surface7-on-demand.XXXXXXXX)"
 cleanup() { rm -rf -- "$tmp"; }
 trap cleanup EXIT
+
+gstreamer_plugin_dir="$SURFACE7_LIBDIR/gstreamer-1.0"
+if ! sudo test -f "$gstreamer_plugin_dir/libgstlibcamera.so"; then
+    echo "The Surface-built libcamerasrc plugin is missing from $gstreamer_plugin_dir." >&2
+    exit 1
+fi
+if ! GST_PLUGIN_PATH="$gstreamer_plugin_dir" \
+    GST_REGISTRY="$tmp/gstreamer-registry.bin" \
+    gst-inspect-1.0 libcamerasrc >/dev/null 2>&1; then
+    echo "The Surface-built libcamerasrc plugin could not be loaded; refusing deployment." >&2
+    exit 1
+fi
 
 cc -O2 -Wall -Wextra -Werror -o "$tmp/surface7-v4l2-client-watch" \
     "$ROOT/prototypes/v4l2loopback-client-watch.c"
