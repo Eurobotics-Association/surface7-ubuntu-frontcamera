@@ -162,7 +162,7 @@ install_and_activate() {
     sudo systemctl enable surface7-front-camera-on-demand.service || return 1
     if [[ -e /dev/video83 ]]; then
         sudo systemctl start surface7-front-camera-idle-relay.service || return 1
-        sudo systemctl start surface7-front-camera-on-demand.service || return 1
+        sudo systemctl restart surface7-front-camera-on-demand.service || return 1
         sudo systemctl is-active --quiet surface7-front-camera-idle-relay.service || return 1
         sudo systemctl is-active --quiet surface7-front-camera-on-demand.service || return 1
     else
