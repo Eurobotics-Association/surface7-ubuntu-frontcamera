@@ -11,23 +11,33 @@ LED went out. There is no camera GStreamer process running. The virtual
 `/dev/video83` node and loaded camera modules remain present. No reboot,
 module reload, or package operation was needed to stop the feed.
 
-The on-demand relay and event controller are installed. The old always-on
-service is stopped and its boot timer is disabled. The physical capture process
-is stopped at idle, and Robert has confirmed the front-camera LED is now off.
+PR #15 is merged, and the GitHub installer has updated the existing
+project-owned deployment from `main`. The product-built libcamera plugin and
+runtime registry are selected by the active on-demand service. Its preflight
+passed all 22 checks with no warnings or failures; required Ubuntu packages
+were already installed. No kernel rebuild, reboot, or module reload was needed.
 
-Two capture failures have been isolated and recorded. The first pipeline used
-an unsupported `ae-enable` property; PR #14 removed it. The next attempt loaded
-Ubuntu's stock `libcamerasrc` 0.2.0 because the on-demand systemd unit did not
-select the product-built plugin. That plugin could not enumerate the camera,
-although the OV5693 sensor and enabled media link were present in the kernel
-media graph. The old always-on unit had selected the product plugin from
-`/usr/local/lib/surface7-ubuntu-frontcamera/gstreamer-1.0`.
+The old always-on service and timer are inactive. The idle relay and controller
+are active, and the physical GStreamer source stops after capture ends. A
+bounded `v4l2-ctl` read from `/dev/video83` triggered the controller and
+received 30 frames. Camera logs show the OV5693 front sensor, its tuning file,
+software ISP debayering, and live autofocus frame updates. A temporary image
+made from the captured stream was upright (ceiling at the top). Temporary
+capture files were removed. This verifies live frames through the on-demand
+V4L2 path and confirms the stream can stop at idle.
 
-The current branch selects that same product plugin in the on-demand unit,
-uses a fresh GStreamer registry under `/run/surface7-ubuntu-frontcamera`, and
-adds a deployment preflight that verifies the plugin can load. This fix still
-needs merge, installation from `main`, and a new live-frame/idle-stop test.
-No successful image has yet been produced through the on-demand controller.
+The internal WebcamTests.com page detected the device, but its launch state
+changed from “waiting for permission” to “video track paused” without a visible
+preview or populated frame statistics. It did trigger the camera pipeline,
+which then stopped when capture became inactive. Cheese was launched through
+the isolated temporary provider for 20 seconds; its V4L2 request started the
+controller and returned it to idle at test close, but the Cheese preview could
+not be inspected through this session's UI controls. Those two application
+previews remain unverified. Brave, Firefox, and Opera were not available in
+the current UI-control inventory for live retesting. The white LED is not
+software-readable; Robert had confirmed it went out after the old continuous
+service was stopped, and the new service now leaves the physical pipeline
+stopped at idle.
 
 ## Evidence from the previous GStreamer service
 
@@ -47,18 +57,14 @@ controller works.
 
 ## On-demand acceptance matrix
 
-Run each client separately, wait for the live image, then close the client.
-Record whether the picture is upright, whether frames move, the physical LED
-state, and whether the physical GStreamer process stops after the two-second
-grace period.
-
-| Client | Discovery | Moving frames | Orientation | LED off after close |
+| Client/path | Discovery/request | Moving frames | Orientation | Idle result |
 | --- | --- | --- | --- | --- |
-| Cheese | Pending | Pending | Pending | Pending |
-| Firefox | Pending | Pending | Pending | Pending |
-| Brave | Pending | Pending | Pending | Pending |
-| Opera | Pending | Pending | Pending | Pending |
-| WebcamTests.com | Pending | Pending | Pending | Pending |
+| V4L2 read test | `/dev/video83` opened and triggered the controller. | 30 frames read; temporary sample converted to PNG. | Upright; ceiling at top. | Controller stopped GStreamer after the client closed. LED not software-readable. |
+| Cheese | Isolated provider launched; controller started on its V4L2 request. | Preview not visually inspected in this UI session. | Not verified in this run. | Controller returned to idle when the 20-second test ended. |
+| WebcamTests.com in Codex browser | Device listed; click reached a waiting state then “video track paused.” | No visible browser preview or frame statistics. | Not verified in this run. | Controller stopped after capture became inactive. |
+| Firefox | Not retested; native app UI unavailable to this session. | Not verified. | Not verified. | Not verified. |
+| Brave | Not retested; native app UI unavailable to this session. | Not verified. | Not verified. | Not verified. |
+| Opera | Not retested; native app UI unavailable to this session. | Not verified. | Not verified. | Not verified. |
 
 The V4L2 `CLIENT_USAGE` payload is a Boolean, not a client count: `0` means
 idle and `1` means a capture stream is active. Concurrent-client behavior
@@ -78,9 +84,10 @@ must be tested as contention separately.
 - `scripts/rollback.sh --previous-deployment` restores the pre-transition
   service files and their enabled/active states while keeping DKMS, firmware,
   and packages. Full rollback restores the original project-level backup.
-- Temperatures observed before this update were below 95°C. Continue below and
-  at 95°C; if readings exceed 95°C, pause heavy work for three minutes and
-  resume while monitoring.
+- The highest thermal-zone reading during this capture/testing session was
+  59°C. Continue through 95°C; if a reading exceeds 95°C, pause heavy work for
+  three minutes and resume while monitoring.
+- GitHub Actions static validation passed for PR #15 before merge.
 
 ## Historical investigation
 

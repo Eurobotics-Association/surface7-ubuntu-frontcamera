@@ -14,15 +14,21 @@ GStreamer process stops at idle. Robert confirmed that the white front-camera
 LED has gone out. The relay writes a single initialization frame and then
 waits; it does not generate a repeating idle video stream.
 
-Live capture through the on-demand controller is not yet validated. The first
-attempt exited because the pipeline specified unsupported `ae-enable`; that
-was removed. The next attempt used Ubuntu's stock `libcamerasrc` plugin
-(version 0.2.0), which found no camera. The kernel media graph did show the
-OV5693 sensor and enabled link, and the former always-on service explicitly
-selected the Surface-built libcamera 0.7.2 plugin. This branch now sets that
-product plugin path and a fresh GStreamer registry in the on-demand service,
-and its deployment preflight checks that the plugin loads. Merge, reinstall,
-and successful moving-frame plus idle-stop tests are still required.
+PR #15 adds the Surface-built plugin path and a fresh runtime GStreamer
+registry to the on-demand service. The merged GitHub installer has deployed
+that fix. A bounded V4L2 client read 30 frames through `/dev/video83`; logs
+show the front OV5693 sensor, its tuning file and live software-ISP frames.
+A temporary captured frame was upright, with the ceiling at the top. After
+the client closed, the controller stopped GStreamer and returned to idle.
+
+The internal WebcamTests.com page listed the camera but went from “waiting for
+permission” to “video track paused” without showing a preview or statistics.
+Cheese started the camera pipeline through the isolated provider and returned
+to idle after a 20-second test, but its preview could not be visually inspected
+with the available UI controls. Firefox, Brave and Opera were not available
+for live retesting from this session. Thus the underlying on-demand V4L2 frame
+path is verified; browser and Cheese preview compatibility still need
+application-level confirmation.
 
 ## Why on-demand
 
@@ -160,11 +166,36 @@ manual, separately authorized action.
   `/usr/local/lib/surface7-ubuntu-frontcamera/gstreamer-1.0`; the new unit had
   omitted that environment. This branch adds the product `GST_PLUGIN_PATH`,
   a runtime-scoped `GST_REGISTRY`, and a preflight load check.
-- **Current fix status:** static checks and live deployment still pending.
-  Do not count camera enumeration as a captured image: the on-demand path has
-  not yet produced a verified live frame. After merge/reinstall, repeat
-  WebcamTests.com and Cheese capture, verify orientation and moving frames,
-  then close each client and verify the physical process and LED return to idle.
+- **PR #15 and redeployment:** GitHub Actions static validation passed. The
+  merged GitHub installer updated the existing deployment without rebuilding
+  kernel modules; the active unit reports the product
+  `GST_PLUGIN_PATH` and runtime registry.
+- **On-demand V4L2 frame capture:** `v4l2-ctl` read 30 frames from
+  `/dev/video83`, triggering the controller. Libcamera selected
+  `_SB_.PCI0.I2C2.CAMF`, loaded the OV5693 tuning file, and the software ISP
+  processed live frames. One temporary frame was converted to PNG and visually
+  checked: orientation is upright (ceiling at the top). Temporary raw and PNG
+  files were deleted after inspection. This verifies actual frames, rather
+  than enumeration alone.
+- **WebcamTests.com after redeploy:** the device appeared in the in-app browser.
+  After launch, the page waited for permission, then reported that its video
+  track was paused; no live preview or frame statistics appeared. The event
+  did start the physical pipeline, which stopped when the browser capture went
+  inactive. The site-level preview remains unverified.
+- **Cheese after redeploy:** the repository's isolated provider built and
+  Cheese ran under a 20-second timeout. Its request started the on-demand
+  source and the controller returned to idle at test end. The process logged
+  two non-fatal `GST_IS_ELEMENT` critical warnings and Cheese's stock
+  libcamera reported no IPA. This session could not inspect the Cheese window,
+  so a visible Cheese preview is not claimed.
+- **Brave, Firefox and Opera after redeploy:** not retested because those
+  desktop windows were not exposed to the available UI-control session. Prior
+  user-reported results apply to the earlier always-on service only.
+- **Idle stop:** after both the V4L2 read and Cheese test, the controller logs
+  show GStreamer stopped and capture idle. No `gst-launch-1.0` or Cheese
+  process remained. The LED itself cannot be read by software; Robert had
+  confirmed it went out after stopping the previous continuous service.
+  No reboot or module reload was performed.
 - **Migration helper issue:** the first install could not copy the persistent
   rollback helper because `$SURFACE7_LIBDIR/scripts` did not exist. The
   deployment continued, while the one-time previous-deployment snapshot was
