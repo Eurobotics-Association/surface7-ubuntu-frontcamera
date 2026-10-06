@@ -10,6 +10,8 @@ if [[ $EUID -eq 0 ]]; then
     exit 1
 fi
 
+"$ROOT/scripts/install-build-deps.sh"
+
 command -v cc >/dev/null 2>&1 || { echo "C compiler is missing; run scripts/install-build-deps.sh." >&2; exit 1; }
 command -v gst-launch-1.0 >/dev/null 2>&1 || { echo "gst-launch-1.0 is missing; install the repository's Ubuntu packages first." >&2; exit 1; }
 gst-inspect-1.0 libcamerasrc >/dev/null 2>&1 || { echo "GStreamer libcamerasrc is missing; the physical camera pipeline cannot start." >&2; exit 1; }
