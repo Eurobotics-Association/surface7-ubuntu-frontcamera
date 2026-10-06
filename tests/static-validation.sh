@@ -22,6 +22,23 @@ python3 -Werror::SyntaxWarning -m py_compile "$ROOT/scripts/prepare-upstream-ins
 
 tmp="$(mktemp -d -t surface7-static-check.XXXXXXXX)"
 trap 'rm -rf "$tmp"' EXIT
+
+provider_plugin="$tmp/provider/libgstsurface7v4l2camera.so"
+bash "$ROOT/scripts/build-gstreamer-provider.sh" "$provider_plugin"
+GST_PLUGIN_PATH="$tmp/provider" \
+GST_PLUGIN_PATH_1_0="$tmp/provider" \
+GST_REGISTRY="$tmp/provider-registry.bin" \
+    gst-inspect-1.0 surface7v4l2camera >"$tmp/provider-inspect.txt"
+grep -Fq 'surface7-v4l2-camera-provider' "$tmp/provider-inspect.txt"
+cc -std=c11 -O2 -Wall -Wextra -Werror \
+    $(pkg-config --cflags gstreamer-1.0) \
+    "$ROOT/tests/gstreamer-provider-capture.c" \
+    -o "$tmp/gstreamer-provider-capture" \
+    $(pkg-config --libs gstreamer-1.0)
+grep -Fq 'Exposes only the labeled Surface Pro 7 V4L2 loopback camera' \
+    "$ROOT/gstreamer/surface7-v4l2-device-provider.c"
+grep -Fq 'V4L2_CAP_VIDEO_CAPTURE' "$ROOT/gstreamer/surface7-v4l2-device-provider.c"
+grep -Fq '"io-mode", "rw"' "$ROOT/gstreamer/surface7-v4l2-device-provider.c"
 cp -a "$ROOT/upstream/surface-pro-7-camera" "$tmp/upstream"
 mkdir -p "$tmp/upstream/scripts" "$tmp/upstream/ubuntu-deployment"
 install -m 0644 "$ROOT/systemd/system/surface7-front-camera.service" \
