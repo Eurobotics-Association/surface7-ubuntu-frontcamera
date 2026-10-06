@@ -1,6 +1,6 @@
 # Surface Pro 7 camera work — current handoff
 
-Updated: 6 October 2026, 23:40 CEST
+Updated: 6 October 2026, 23:50 CEST
 
 ## Goal
 
@@ -18,9 +18,9 @@ Finish a reliable Ubuntu front-camera setup for Microsoft Surface Pro 7. Keep th
 ## Latest evidence and unresolved apps
 
 - Direct V4L2 testing previously read 30 frames. A temporary sample was upright, with the ceiling at the top.
-- Robert reports WebcamTests.com eventually displayed 1280×720 RGB at 29 FPS and “Surface Pro 7 Front Camera” after three attempts. There were source start/stop cycles during retries. Closing the successful tab stopped capture and the white LED went out.
+- Robert reports WebcamTests.com eventually displayed 1280×720 RGB at 29 FPS. He did not manually retry. The page's device name changed after permission approval, it requested approval again, automatically stopped/restarted the stream, then selected “Surface Pro 7 Front Camera” and produced stable frames. Closing the tab stopped capture and the white LED went out. The cause is unknown.
 - Cheese did not discover the synthetic camera in the latest attempt. An isolated provider showed a preview in an earlier test, but not reliably. Cheese remains unresolved.
-- Firefox has not been retested against the current on-demand deployment; earlier attempts failed.
+- Firefox has not been retested against the current on-demand deployment; earlier attempts failed. Teams and Google Meet are untested.
 - Robert previously reported Brave and Opera working with an earlier service version. Retest both against the current deployment.
 - Image orientation has differed across application tests. Do not add a global rotation; capture and record one result for each client.
 - The current design is experimental. A browser success and a direct V4L2 read do not prove the app matrix or first-try startup reliability.
@@ -36,8 +36,8 @@ Finish a reliable Ubuntu front-camera setup for Microsoft Surface Pro 7. Keep th
 ## Continue with these tests
 
 1. Test Cheese by itself. Compare normal GStreamer device discovery with the isolated provider. Confirm Cheese selects /dev/video83, displays moving frames, and shows the correct orientation. Capture provider and Cheese logs, including the GStreamer criticals.
-2. Test one browser at a time: grant camera access, keep the stream active long enough to confirm steady frames, note device labels and source transitions, close the tab, then verify the physical pipeline stops and LED goes out.
-3. Repeat for Brave, Opera, and Firefox on the current deployment. Record the actual Firefox error rather than relying on the site's generic “busy or blocked” message.
+2. Test one browser at a time. Capture device IDs/labels, permission state, devicechange events, browser console/WebRTC logs, and service transitions before and after approval; wait for stable frames, close the tab, then verify the physical pipeline and LED stop. Robert did not manually retry in the reported session, so investigate the page/device transition itself.
+3. Repeat for Brave, Opera, and Firefox on the current deployment. Record the actual Firefox error rather than relying on the site's generic “busy or blocked” message. Test Teams and Google Meet separately; their compatibility is unknown.
 4. Do not install the provider globally, change the source rotation, reload camera modules, or reboot until the change is rollback-covered and the needed hardware test is explicitly authorized.
 
 ## Install and rollback
