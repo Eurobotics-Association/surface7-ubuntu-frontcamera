@@ -1,4 +1,4 @@
-Updated: 6 October 2026, 22:40 CEST
+Updated: 6 October 2026, 23:40 CEST
 
 # Surface Pro 7 front camera on Ubuntu
 
@@ -10,33 +10,25 @@ For Ubuntu 24.04 x86_64 on a Microsoft Surface Pro 7, run:
 curl -fsSL https://raw.githubusercontent.com/Eurobotics-Association/surface7-ubuntu-frontcamera/main/scripts/install-from-github.sh | bash -s -- --install
 ~~~
 
-The installer checks the OS, running kernel, matching headers, and required packages; it installs missing Ubuntu packages through APT and asks for sudo when needed. A fresh installation builds/registers the kernel support with DKMS and deploys the on-demand GStreamer services. On an existing project-owned installation, the same command verifies ownership and the running-kernel record, then updates the service design without rebuilding DKMS. It does not reboot.
+The GitHub installer checks the device, Ubuntu release, running kernel, matching headers, and required packages. It installs missing Ubuntu packages through APT and asks for sudo when needed. A fresh install builds/registers the camera modules with DKMS and deploys the on-demand GStreamer services. On an existing project-owned installation, it updates the services without rebuilding DKMS. It never reboots automatically.
 
-If the camera kernel modules were just installed and `/dev/video83` is not present yet, the services are enabled for the next boot but are not started. Reboot only when you are ready and follow the system-wide two-minute warning instruction in `AGENTS.md`.
+## Current status
 
-## Camera and privacy behavior
+The experimental on-demand design is deployed. It keeps /dev/video83 discoverable using a low-activity relay with one initialization frame; it does not send black frames continuously. The physical camera pipeline starts when a client requests capture and stops after the client releases it.
 
-The physical image path uses GStreamer with libcamera's `libcamerasrc`, then writes YUYV frames through a FIFO into v4l2loopback at `/dev/video83`. PipeWire camera sources, SPA plugins, and WirePlumber camera rules are not used.
+Robert reports that WebcamTests.com eventually showed live video after three attempts: RGB 1280×720 at 29 FPS, labeled “Surface Pro 7 Front Camera.” The camera source started and stopped during the retries. After the successful session, closing the browser tab stopped the source and the white camera LED went out. This confirms one working browser session and idle release, while the repeated starts remain an open reliability issue.
 
-The V4L2 device remains discoverable while idle. A small relay writes one initialization frame and then waits on the FIFO; it does not generate black frames repeatedly. When an application starts capture, the kernel's v4l2loopback `CLIENT_USAGE` event starts the physical GStreamer pipeline. After capture becomes idle for the two-second grace period, the pipeline stops. Only the relay and event watcher remain running while idle.
-
-Robert confirmed that stopping the previous always-on service extinguished the white front-camera LED without a reboot. The new on-demand service transition is still experimental until its real capture/stop behavior and app matrix pass on the Surface.
-
-## Current validation
-
-Earlier tests produced a live 1280×720 RGB stream at about 29 FPS in the Codex in-app WebcamTests page. Cheese also displayed an upright preview using the isolated GStreamer provider; its launch emitted non-fatal GStreamer critical warnings. Browser orientation has varied between applications and must be checked again on the new service.
-
-The agent has not verified the new on-demand relay/controller against Cheese, Firefox, Brave, Opera, or WebcamTests.com after deployment. See [the on-demand investigation and test record](docs/on-demand-v4l2-prototype.md) and [the general test log](docs/testing.md). Do not infer live capture from module load, device enumeration, or a successful build.
+The latest Cheese attempt did not discover the synthetic camera. Cheese is not accepted yet. Firefox has not been retested against the current on-demand deployment; previous attempts failed. Brave and Opera worked in earlier user tests, but must be retested on this deployment before they are called current passes. Image orientation has differed between clients, so no global rotation is applied. See the [handoff and acceptance record](docs/handoff-current.md), [detailed on-demand investigation](docs/on-demand-v4l2-prototype.md), and [test log](docs/testing.md).
 
 ## Install, update, and inspect
 
-The one-line command above supports fresh installation and updating an existing project-owned installation. From a checked-out repository, the service update can also be run with:
+The command above supports both fresh installation and updating an existing project-owned install. From a checked-out repository, update only the on-demand services with:
 
 ~~~sh
 ./scripts/install.sh --deploy-services
 ~~~
 
-Inspect current services and devices with:
+Read-only checks:
 
 ~~~sh
 ./scripts/check-system.sh
@@ -44,7 +36,7 @@ Inspect current services and devices with:
 systemctl status surface7-front-camera-idle-relay.service surface7-front-camera-on-demand.service
 ~~~
 
-The old always-on unit and its timer are removed during migration. The new services are enabled at boot; the physical camera pipeline remains stopped until a capture request arrives.
+The installer checks required packages and kernel headers. It installs missing Ubuntu packages with APT and sudo when necessary. The old always-on unit and timer are disabled and removed during migration; the on-demand services are enabled at boot. The physical camera pipeline remains stopped while no client is capturing.
 
 ## Rollback
 
@@ -60,12 +52,13 @@ Remove the project deployment and restore saved system files:
 /usr/local/lib/surface7-ubuntu-frontcamera/scripts/rollback.sh
 ~~~
 
-The rollback scripts stop camera services before restoring files. A full rollback can restore older kernel-module files and may require a later manual reboot; the script never reboots automatically. Backups are kept under `/var/lib/surface7-ubuntu-frontcamera/backup`.
+The previous-deployment rollback restores the prior service state; if that state used continuous capture, the camera LED may turn on again. Full rollback can restore older kernel-module files and may require a later manual reboot. Neither rollback mode reboots automatically. Backups are under /var/lib/surface7-ubuntu-frontcamera/backup.
 
-## Project scope
+## Scope
 
-- Target: Microsoft Surface Pro 7 (not 7+) with Ubuntu 24.04 x86_64 and the running Ubuntu HWE kernel.
-- `upstream/surface-pro-7-camera/` is a pinned vendor source snapshot and remains unmodified.
-- All packages are installed from Ubuntu APT repositories.
-- The front IR camera is outside this repository's scope.
-- Surface 5 files and checkouts are not used or modified.
+- Target: Microsoft Surface Pro 7 (not 7+) with Ubuntu 24.04 x86_64 and the currently running Ubuntu kernel.
+- Camera capture uses GStreamer with the Surface-built libcamera plugin and libcamerasrc.
+- No PipeWire camera source, SPA plugin, or WirePlumber camera rule is installed or configured.
+- Packages come from Ubuntu APT repositories.
+- upstream/surface-pro-7-camera/ is a pinned vendor source snapshot and remains unmodified.
+- The front IR camera is outside this repository's scope. Surface 5 files and checkouts are not used or modified.

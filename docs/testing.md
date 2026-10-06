@@ -1,98 +1,69 @@
 # Camera testing and acceptance
 
-Updated: 6 October 2026
+Updated: 6 October 2026, 23:40 CEST
 
-## Current host state
+## Current deployment and result
 
-Robert authorized the camera-service transition and asked to stop the
-continuous feed. The always-on `surface7-front-camera.service` is stopped,
-its boot timer is disabled, and Robert confirmed that the white front-camera
-LED went out. There is no camera GStreamer process running. The virtual
-`/dev/video83` node and loaded camera modules remain present. No reboot,
-module reload, or package operation was needed to stop the feed.
+The experimental on-demand services are installed on Robert's Surface Pro 7. The old always-on camera service and timer are stopped/disabled. The idle relay keeps /dev/video83 discoverable with one retained initialization frame; the physical GStreamer/libcamera pipeline starts on a V4L2 capture request and stops after capture becomes idle. The relay does not emit repeating black frames.
 
-PR #15 is merged, and the GitHub installer has updated the existing
-project-owned deployment from `main`. The product-built libcamera plugin and
-runtime registry are selected by the active on-demand service. Its preflight
-passed all 22 checks with no warnings or failures; required Ubuntu packages
-were already installed. No kernel rebuild, reboot, or module reload was needed.
+Robert confirmed the white camera LED went out after the old continuous service was stopped. In the latest on-demand browser test, he reports that WebcamTests.com eventually showed live video and reported RGB, 1280×720, 29 FPS, and “Surface Pro 7 Front Camera.” It took three attempts; the feed started and stopped between attempts. After the successful session, closing the tab stopped the feed and the LED went out. The host service journal showed multiple capture sessions during the browser sequence. This verifies one successful browser session and idle release, not stable first-try startup.
 
-The old always-on service and timer are inactive. The idle relay and controller
-are active, and the physical GStreamer source stops after capture ends. A
-bounded `v4l2-ctl` read from `/dev/video83` triggered the controller and
-received 30 frames. Camera logs show the OV5693 front sensor, its tuning file,
-software ISP debayering, and live autofocus frame updates. A temporary image
-made from the captured stream was upright (ceiling at the top). Temporary
-capture files were removed. This verifies live frames through the on-demand
-V4L2 path and confirms the stream can stop at idle.
+The latest Cheese attempt did not discover the synthetic camera. An earlier isolated-provider Cheese run showed a preview, but that result does not establish reliable discovery in the current deployment. Firefox has not been retested on the current on-demand services; earlier tests failed. Robert previously reported Brave and Opera working with the earlier camera service. Those reports do not yet establish current on-demand compatibility.
 
-The internal WebcamTests.com page detected the device, but its launch state
-changed from “waiting for permission” to “video track paused” without a visible
-preview or populated frame statistics. It did trigger the camera pipeline,
-which then stopped when capture became inactive. Cheese was launched through
-the isolated temporary provider for 20 seconds; its V4L2 request started the
-controller and returned it to idle at test close, but the Cheese preview could
-not be inspected through this session's UI controls. Those two application
-previews remain unverified. Brave, Firefox, and Opera were not available in
-the current UI-control inventory for live retesting. The white LED is not
-software-readable; Robert had confirmed it went out after the old continuous
-service was stopped, and the new service now leaves the physical pipeline
-stopped at idle.
+## Current application matrix
 
-## Evidence from the previous GStreamer service
-
-| Client | Observed result | Scope |
+| Client/path | Current result | Evidence and limits |
 | --- | --- | --- |
-| Cheese | Robert confirmed the temporary scoped-provider launch displayed an upright live preview. | The provider was isolated to the Cheese process; the system-wide on-demand service was not tested. Two non-fatal GStreamer critical warnings appeared. |
-| WebcamTests.com in the Codex in-app browser | RGB 1280×720 at 29 FPS; video was visible. | An earlier preview appeared upside down. It does not establish Brave, Opera, or Firefox results. |
-| Brave | Robert reported live video. | User-reported test of the previous always-on service; later orientation reports varied. |
-| Opera | Robert reported live video. | User-reported test of the previous always-on service. |
-| Firefox | Previously showed the site's generic “in use or blocked” message; no successful frame was confirmed by the agent. | Exact WebRTC failure remains unknown. |
-| Idle LED | LED went out after stopping the always-on service. | Robert observed this directly; no reboot was needed. |
+| WebcamTests.com | User-reported success after three attempts; RGB 1280×720 at 29 FPS. | Feed started/stopped during retries. Closing the successful tab stopped capture and the LED went out. First-try reliability is unresolved. |
+| Cheese | Current user-reported failure: synthetic camera not discovered. | An earlier isolated GStreamer-provider preview worked once. Treat Cheese as unresolved until the current command reliably discovers the camera and displays moving frames. |
+| Firefox | Not retested against the current on-demand deployment; earlier attempt failed. | Previous page showed a generic “in use or blocked” message. Exact WebRTC error remains unknown. |
+| Brave | User previously reported a live image on the earlier service. | Must be retested with the current on-demand deployment. |
+| Opera | User previously reported a live image on the earlier service. | Must be retested with the current on-demand deployment. |
+| Direct V4L2 read | Pass in an earlier on-demand test: 30 frames read from /dev/video83. | A temporary frame was upright, with the ceiling at the top. This proves frame flow, not app discovery. |
+| Idle release | Pass for the latest WebcamTests.com session, per Robert. | Closing the tab stopped the source and white LED. LED state is user-observed; it is not software-readable. |
 
-Earlier GStreamer readback tests on the previous service produced visible
-moving frames from `/dev/video83`. Those results prove the physical
-GStreamer/libcamera path can deliver frames; they do not prove the on-demand
-controller works.
+Orientation reports have differed across applications and test sessions. The direct V4L2 sample was upright; some browser/desktop previews appeared inverted while Brave and Opera had earlier looked correct. No global image flip has been applied. Recheck and record orientation per client after its live stream is stable.
 
-## On-demand acceptance matrix
+The device label reportedly changed during the browser permission/retry flow. Media Capture devices can have restricted or empty labels before permission is granted and expose labels after permission; this is a plausible explanation, not a diagnosis of the retry sequence. See the [W3C Media Capture and Streams specification](https://www.w3.org/TR/mediacapture-streams/).
 
-| Client/path | Discovery/request | Moving frames | Orientation | Idle result |
-| --- | --- | --- | --- | --- |
-| V4L2 read test | `/dev/video83` opened and triggered the controller. | 30 frames read; temporary sample converted to PNG. | Upright; ceiling at top. | Controller stopped GStreamer after the client closed. LED not software-readable. |
-| Cheese | Isolated provider launched; controller started on its V4L2 request. | Preview not visually inspected in this UI session. | Not verified in this run. | Controller returned to idle when the 20-second test ended. |
-| WebcamTests.com in Codex browser | Device listed; click reached a waiting state then “video track paused.” | No visible browser preview or frame statistics. | Not verified in this run. | Controller stopped after capture became inactive. |
-| Firefox | Not retested; native app UI unavailable to this session. | Not verified. | Not verified. | Not verified. |
-| Brave | Not retested; native app UI unavailable to this session. | Not verified. | Not verified. | Not verified. |
-| Opera | Not retested; native app UI unavailable to this session. | Not verified. | Not verified. | Not verified. |
+## Deployment and rollback audit
 
-The V4L2 `CLIENT_USAGE` payload is a Boolean, not a client count: `0` means
-idle and `1` means a capture stream is active. Concurrent-client behavior
-must be tested as contention separately.
+The public install entry point is the curl command at the beginning of README.md. scripts/install-from-github.sh fetches the repository from GitHub and invokes scripts/install.sh. The installer checks the target Surface, Ubuntu 24.04 x86_64, running kernel, and matching headers. scripts/install-build-deps.sh checks and installs missing build/GStreamer packages through Ubuntu APT and sudo.
 
-## Build and safety checks
+For a fresh install, scripts/install.sh builds and registers the camera modules with DKMS, then deploys the camera services. DKMS AUTOINSTALL is enabled for later kernel installs. On an existing project-owned installation, --install checks ownership and the recorded running kernel, then updates the service design without rebuilding DKMS. --deploy-services updates just the on-demand services.
 
-- The watcher compiled with `cc -O2 -Wall -Wextra -Werror`.
-- The pinned vendor relay compiled with the same warning flags.
-- The Python controller passed syntax compilation.
-- The new and existing systemd units passed `systemd-analyze verify` in a temporary root with stubbed executable paths and standard target units.
-- `scripts/deploy-services.sh` performs package preflight, checks the running
-  kernel against the deployment marker, builds into a temporary directory,
-  snapshots the old service state once, disables/removes the always-on unit and
-  timer, installs the rollback helper, and enables/restarts the relay/controller
-  services. Failures are routed through the previous-deployment rollback.
-- `scripts/rollback.sh --previous-deployment` restores the pre-transition
-  service files and their enabled/active states while keeping DKMS, firmware,
-  and packages. Full rollback restores the original project-level backup.
-- The highest thermal-zone reading during this capture/testing session was
-  59°C. Continue through 95°C; if a reading exceeds 95°C, pause heavy work for
-  three minutes and resume while monitoring.
-- GitHub Actions static validation passed for PR #15 before merge.
+scripts/deploy-services.sh checks package availability, the active kernel against the deployment record, and the product-built libcamerasrc plugin. It compiles the event watcher and relay with warnings treated as errors, checks Python syntax, snapshots the previous service files and enablement/active states once, disables/removes the old always-on service, and enables the relay/controller. Deployment errors invoke the previous-deployment rollback. The deploy script does not test Cheese or browser previews; systemd activation is not app acceptance.
+
+Previous service rollback:
+
+~~~sh
+/usr/local/lib/surface7-ubuntu-frontcamera/scripts/rollback.sh --previous-deployment
+~~~
+
+Full project rollback and system-file restoration:
+
+~~~sh
+/usr/local/lib/surface7-ubuntu-frontcamera/scripts/rollback.sh
+~~~
+
+Previous-deployment rollback restores the prior service and its recorded active/enabled state, so restoring an always-on service may turn the camera LED on again. Full rollback removes the project-owned modules and restores backed-up files; a manual reboot may be needed to restore the prior module state. Neither rollback mode reboots automatically.
+
+## Earlier verified on-demand path
+
+A bounded v4l2-ctl read opened /dev/video83 and triggered the controller. It received 30 frames. Libcamera logs showed the OV5693 front sensor, tuning file, software ISP processing, and autofocus updates. A temporary image from the stream was upright. Temporary capture files were deleted.
+
+The first on-demand GStreamer attempt used an unsupported ae-enable property; that property was removed. The next attempt loaded Ubuntu's stock libcamerasrc and could not find the configured Surface camera. The service lacked the product-built libcamera plugin path used by the old service. PR #15 added the product GST_PLUGIN_PATH, a runtime-scoped GStreamer registry, and a plugin preflight. After merge and redeployment, direct V4L2 capture succeeded. PR #16 recorded the frame and client-test limits. The corresponding GitHub Actions validation passed before those merges.
+
+Cheese has a separate GStreamer discovery issue. Ordinary gst-device-monitor-1.0 Video/Source listing hid /dev/video83; --include-hidden showed the loopback with misleading provider capability metadata. A process-local scoped provider prototype exposed only the Surface loopback and a provider-created v4l2src pipeline read frames, but emitted two GStreamer critical warnings. It was not installed system-wide. The current Cheese failure must be resolved with a repeatable, scoped-provider and Cheese UI test before integrating that workaround.
+
+## Next validation sequence
+
+1. Test Cheese alone. Confirm whether ordinary discovery lists /dev/video83; if not, use the isolated provider script and capture Cheese/GStreamer logs. Verify the selected source is the synthetic Surface camera, then confirm moving frames and orientation. Keep any provider process-scoped until it passes repeatable tests.
+2. Test WebcamTests.com in one browser at a time. Close all other camera clients, grant permission, wait for stable frames, note source transitions, then close the tab and verify that capture and the LED stop.
+3. Repeat the same controlled test in Brave and Opera on the current deployment; then test Firefox alone and record its exact selected device and failure.
+4. Record orientation separately for each app. Do not rotate the shared source to correct a single application's display.
+5. Keep the deployment experimental until these checks are repeatable. Do not reboot or reload camera modules without explicit authorization; before any reboot, broadcast the two-minute all-user warning and wait the full interval.
 
 ## Historical investigation
 
-Earlier kernel, module, Firefox, Cheese, GStreamer enumeration, and provider
-experiments are preserved in
-[the dated testing archive](testing-archive-2026-10-05-and-06.md). Those notes
-include intermediate failures and temporary settings; refer to the current
-sections above for the latest service and acceptance state.
+Earlier kernel, module, Firefox, Cheese, GStreamer enumeration, and provider experiments are preserved in the [dated testing archive](testing-archive-2026-10-05-and-06.md). That archive is historical; this page is the current acceptance record.
