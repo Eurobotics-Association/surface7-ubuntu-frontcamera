@@ -9,11 +9,11 @@
 static GstPadProbeReturn
 count_buffer(GstPad *pad, GstPadProbeInfo *info, gpointer data)
 {
-  guint *count = data;
+  gint *count = data;
 
   (void) pad;
   if ((GST_PAD_PROBE_INFO_TYPE(info) & GST_PAD_PROBE_TYPE_BUFFER) != 0)
-    (*count)++;
+    g_atomic_int_inc(count);
   return GST_PAD_PROBE_OK;
 }
 
@@ -52,7 +52,7 @@ main(int argc, char **argv)
   GstMessage *message = NULL;
   GError *error = NULL;
   gchar *debug = NULL;
-  guint buffers = 0;
+  gint buffers = 0;
   gboolean monitor_started = FALSE;
   gboolean elements_added = FALSE;
   int result = 1;
@@ -119,8 +119,12 @@ main(int argc, char **argv)
     goto cleanup;
   }
 
-  g_print("EOS=yes\nBUFFERS=%u\n", buffers);
-  result = buffers == EXPECTED_BUFFERS ? 0 : 2;
+  {
+    gint buffer_count = g_atomic_int_get(&buffers);
+
+    g_print("EOS=yes\nBUFFERS=%d\n", buffer_count);
+    result = buffer_count == EXPECTED_BUFFERS ? 0 : 2;
+  }
 
 cleanup:
   g_clear_error(&error);
