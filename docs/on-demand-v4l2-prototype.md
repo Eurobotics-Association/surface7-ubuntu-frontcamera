@@ -15,9 +15,17 @@ capture-active state. `prototypes/on-demand-gstreamer-controller.py` watches
 those events, starts the existing `libcamerasrc` capture settings on active
 capture, and stops that GStreamer process after an idle grace period. The
 controller only writes to a pre-existing named FIFO; it refuses a regular
-file path. Both sources pass local compiler/syntax checks. Neither has been
-run against a V4L2 node or the Surface camera. Live testing needs Robert
-present with the elevated `surf7cam-test` tmux session available.
+file path. Both sources pass local compiler/syntax checks. On 6 October 2026, the event
+observer was run against the deployed `/dev/video83` as the desktop user. Its
+first build received the initial inactive event, then exited when a second
+nonblocking dequeue returned `ENOENT` for an empty queue. After fixing that
+handling, a temporary out-of-tree build observed browser capture transitions
+`0 → 1 → 0`; Cheese emitted a brief startup `1 → 0 → 1`, remained active
+while its preview was open, and returned to `0` when closed. The current
+producer service was left running throughout. The GStreamer controller and
+idle relay have not been run on hardware. Later tests of a different node
+configuration still require Robert present with the elevated
+`surf7cam-test` tmux session available.
 
 ## Why this design
 
@@ -52,6 +60,9 @@ References:
   queues the private usage event at capture stream start/stop.
 - [Linux V4L2 STREAMON/STREAMOFF documentation](https://docs.kernel.org/userspace-api/media/v4l/vidioc-streamon.html)
   defines those operations as starting/stopping capture or output streaming.
+- [Linux V4L2 event-queue implementation](https://github.com/torvalds/linux/blob/master/drivers/media/v4l2-core/v4l2-event.c#L976-L1058)
+  returns `ENOENT` when a nonblocking event dequeue finds an empty queue; the
+  watcher now treats that as a drained queue.
 - [Upstream loopback capability notes](https://github.com/v4l2loopback/v4l2loopback/blob/main/README.md#options)
   explain why `exclusive_caps=1` devices can be invisible as cameras before a
   producer is attached. The `keep_format` control and producer attachment
@@ -117,11 +128,15 @@ unchanged and implement any GStreamer adaptation in a separate prototype.
 
 ## Prototype phases
 
-1. **Event observer:** compile the small watcher without sudo, then run it on
-   the selected loopback node while applications start and stop capture. Confirm
-   that enumeration alone leaves the state idle and active capture produces
-   transitions. The watcher opens the loopback node only to subscribe to its
-   event; it does not stream video.
+1. **Event observer (tested on the deployed node):** a temporary build ran
+   without sudo against `/dev/video83`. The initial state was inactive;
+   WebcamTests.com produced `0 → 1 → 0`, and Cheese returned to inactive after
+   closing. Cheese had a short `1 → 0 → 1` startup sequence before settling
+   active. The watcher opens the loopback node only to subscribe to its event;
+   it does not stream video. It observes the capture client count, not an
+   application name. The initial build exposed and fixed the empty-queue
+   `ENOENT` case. This validates event delivery only, not on-demand startup or
+   sensor/LED shutdown.
 2. **Idle-node compatibility:** on a separate temporary V4L2 loopback node,
    compare `keep_format` with the one-frame idle relay. Determine whether
    Cheese and browsers discover the camera before live frames exist, and
@@ -139,11 +154,13 @@ unchanged and implement any GStreamer adaptation in a separate prototype.
    after the last client stops. Also test two clients, permission denial,
    abrupt client exit, and application startup latency.
 
-No camera or runtime test has been performed for this prototype yet. The
-controller is not an accepted on-demand camera implementation and does not
-prove the LED turns off. If the `CLIENT_USAGE` event is absent or unsuitable in
-the installed module, evaluate a minimal DKMS event patch before considering a
-new V4L2 driver.
+The event observer has now been exercised on the active deployed loopback
+node, but the on-demand controller, idle relay, and producer lifecycle have
+not been tested on the Surface. The controller is not an accepted on-demand
+camera implementation and these checks do not prove that the physical sensor
+or LED turns off. If the `CLIENT_USAGE` event proves unsuitable under the
+planned idle-node configuration, evaluate a minimal DKMS event patch before
+considering a new V4L2 driver.
 
 ## Build and later live observation
 
