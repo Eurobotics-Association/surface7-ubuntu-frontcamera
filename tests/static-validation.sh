@@ -151,6 +151,10 @@ if grep -Fq 'sudo "$SURFACE7_LIBDIR/scripts/rollback.sh" --previous-deployment' 
 fi
 grep -Fq 'capture_active=%u' "$ROOT/prototypes/v4l2loopback-client-watch.c"
 grep -Fq 'capture_active=([01])' "$ROOT/prototypes/on-demand-gstreamer-controller.py"
+if grep -Fq 'ae-enable=true' "$ROOT/prototypes/on-demand-gstreamer-controller.py" "$ROOT/scripts/surface7-front-camera"; then
+    echo "GStreamer pipeline uses an unsupported libcamerasrc property." >&2
+    exit 1
+fi
 grep -Fq 'single initialization frame' "$ROOT/docs/on-demand-v4l2-prototype.md"
 grep -Fq 'BindsTo=surface7-front-camera-idle-relay.service' \
     "$ROOT/systemd/system/surface7-front-camera-on-demand.service"
