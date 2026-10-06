@@ -4,7 +4,7 @@ Updated: 6 October 2026
 
 ## Why this exists
 
-The camera producer delivers frames to the working `/dev/video83` loopback. Brave and Opera have displayed it, but Cheese's device monitor has not consistently exposed it. The patched libcamera GStreamer provider omits `/dev/video83` from the ordinary `Video/Source` list; the hidden entry has stale `video_output` capability metadata even though V4L2 reports capture capability.
+The camera producer delivers frames to the working `/dev/video83` loopback. Brave and Opera have displayed it, but Cheese's device monitor has not consistently exposed it. The default GStreamer monitor omits `/dev/video83`; `--include-hidden` reveals an entry with stale `video_output` capability metadata even though V4L2 reports capture capability. This is consistent with provider-side capability filtering, but that metadata has not been proven as the root cause.
 
 `gstreamer/surface7-v4l2-device-provider.c` is a narrowly scoped candidate provider. It checks the selected node with `VIDIOC_QUERYCAP`, requires the `v4l2 loopback` driver, capture capability, and the exact product card label, then publishes a `Video/Source` device whose source element uses `v4l2src io-mode=rw`. It does not unhide or alter the normal V4L2 provider, so it does not expose the raw IPU nodes seen in the earlier provider-unhiding experiment.
 
@@ -24,7 +24,7 @@ When the desktop user is available to observe the result, launch Cheese with the
 bash ./scripts/run-cheese-with-provider.sh
 ~~~
 
-Select **Surface Pro 7 Front Camera** if Cheese asks for a device. Record separately whether Cheese lists it and whether live frames appear. The helper builds in a temporary directory, uses a fresh GStreamer registry, runs Cheese without `sudo`, and removes its temporary files when Cheese exits. It does not install packages or change services, modules, or system plugin directories.
+Close other browser/app camera tests first, but leave the GStreamer camera service running. Select **Surface Pro 7 Front Camera** if Cheese asks for a device. Record separately whether Cheese lists it and whether live frames appear. The helper builds in a temporary directory, uses a fresh GStreamer registry, runs Cheese without `sudo`, and removes its temporary files when Cheese exits. It does not install packages or change services, modules, or system plugin directories.
 
 For a headless, bounded test of the same device-monitor and source-element path, run this only when no other application is using the camera:
 
