@@ -169,3 +169,14 @@ One temporary helper exited inside its cleanup after Cheese did not respond to t
 No package installation or reboot occurred. The highest observed temperature was 72°C, below Robert's 95°C pause threshold. Brave and Opera remain user-reported working; Firefox and Cheese remain unresolved. Do not adopt exclusive_caps=0, do not use a PipeWire camera route, and do not treat device enumeration, service activity, negotiated caps, or an exit code alone as proof of captured frames.
 
 Next, isolate and resolve the GStreamer/V4L2 capability metadata mismatch while preserving the current GStreamer/libcamera path. Then test Cheese against the virtual node with frame readback. Revisit Firefox selection only when its actual device list exposes the Surface camera; the headless node-62 results are inconsistent and no targeted capture has passed.
+
+
+## Scoped GStreamer provider probe — 6 October 2026
+
+A process-local no-op interposition on gst_device_provider_hide_provider made the ordinary GStreamer monitor enumerate /dev/video83. That same probe exposed raw IPU V4L2 endpoints, confirming that globally unhiding the default V4L2 provider is not a safe application fix. It was a temporary shim in /tmp; it was never installed.
+
+A separate /tmp prototype registered a unique Surface camera provider. It queried the loopback node through V4L2 and returned a Video/Source device only when the driver, active capture capability, and card label matched the Surface loopback. With GST_PLUGIN_PATH=/tmp and a fresh temporary registry, ordinary gst-device-monitor-1.0 Video/Source listed the Surface camera and presented v4l2src device=/dev/video83 io-mode=rw as its element recipe. The target did not require enabling PipeWire or un-hiding the raw V4L2 provider.
+
+A temporary C harness called gst_device_create_element() on that returned device and read five buffers to EOS. It also emitted two GStreamer critical warnings from libgstvideo4linux2.so (GST_IS_ELEMENT assertion failure in gst_element_message_full_with_details). A direct gst-launch-1.0 five-frame read using v4l2src device=/dev/video83 io-mode=rw did not emit the warning. The provider-created source can move frames, but the critical-warning difference is unresolved, so this is not yet a production implementation.
+
+Nothing was installed. The host service and module settings were left running as found; no reboot, module reload, Cheese GUI launch, Firefox setting change, or PipeWire change occurred. Cheese still needs an observed desktop test after the warning is understood. Brave and Opera are user-reported working; Firefox remains unresolved. Do not repeat the global hide shim or adopt a blanket provider-unhide patch. Next implement/test the scoped provider only after the V4L2 critical warning is explained, then run Cheese with the user present and include exact installation/rollback coverage before deployment.
