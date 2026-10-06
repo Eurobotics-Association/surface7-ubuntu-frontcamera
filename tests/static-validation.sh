@@ -142,7 +142,7 @@ grep -Fq 'systemctl disable --now surface7-front-camera.timer' "$ROOT/scripts/de
 grep -Fq 'systemctl stop surface7-front-camera.service' "$ROOT/scripts/deploy-services.sh"
 grep -Fq 'pre-on-demand' "$ROOT/scripts/deploy-services.sh"
 grep -Fq -- '--previous-deployment' "$ROOT/scripts/rollback.sh"
-grep -Fq 'capture_active=([01])' "$ROOT/prototypes/v4l2loopback-client-watch.c"
+grep -Fq 'capture_active=%u' "$ROOT/prototypes/v4l2loopback-client-watch.c"
 grep -Fq 'capture_active=([01])' "$ROOT/prototypes/on-demand-gstreamer-controller.py"
 grep -Fq 'single initialization frame' "$ROOT/docs/on-demand-v4l2-prototype.md"
 grep -Fq 'BindsTo=surface7-front-camera-idle-relay.service' \
