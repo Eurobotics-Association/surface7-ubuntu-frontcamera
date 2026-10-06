@@ -142,6 +142,13 @@ grep -Fq 'systemctl disable --now surface7-front-camera.timer' "$ROOT/scripts/de
 grep -Fq 'systemctl stop surface7-front-camera.service' "$ROOT/scripts/deploy-services.sh"
 grep -Fq 'pre-on-demand' "$ROOT/scripts/deploy-services.sh"
 grep -Fq -- '--previous-deployment' "$ROOT/scripts/rollback.sh"
+grep -Fq 'sudo install -d -m 0755 "$SURFACE7_LIBDIR/scripts"' "$ROOT/scripts/deploy-services.sh"
+grep -Fq 'trap on_deploy_error ERR' "$ROOT/scripts/deploy-services.sh"
+grep -Fq '"$rollback_script" --previous-deployment' "$ROOT/scripts/deploy-services.sh"
+if grep -Fq 'sudo "$SURFACE7_LIBDIR/scripts/rollback.sh" --previous-deployment' "$ROOT/scripts/deploy-services.sh"; then
+    echo "Automatic rollback must run as the desktop user so its sudo checks work." >&2
+    exit 1
+fi
 grep -Fq 'capture_active=%u' "$ROOT/prototypes/v4l2loopback-client-watch.c"
 grep -Fq 'capture_active=([01])' "$ROOT/prototypes/on-demand-gstreamer-controller.py"
 grep -Fq 'single initialization frame' "$ROOT/docs/on-demand-v4l2-prototype.md"
