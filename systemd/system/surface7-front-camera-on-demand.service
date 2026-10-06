@@ -2,6 +2,7 @@
 [Unit]
 Description=Surface Pro 7 front camera on-demand GStreamer controller
 Requires=sp7-camera-boot.service surface7-front-camera-idle-relay.service
+BindsTo=surface7-front-camera-idle-relay.service
 After=sp7-camera-boot.service surface7-front-camera-idle-relay.service
 ConditionPathExists=/dev/video83
 StartLimitIntervalSec=60
