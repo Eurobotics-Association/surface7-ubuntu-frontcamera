@@ -9,13 +9,15 @@ It starts a GStreamer-based prototype for powering the Surface Pro 7 front
 camera only while a V4L2 client is capturing. It does not change the main
 branch, deploy files to the host, install packages, reload modules, or reboot.
 
-The first prototype component, `prototypes/v4l2loopback-client-watch.c`, is
-only an event observer. It subscribes to the v4l2loopback `CLIENT_USAGE`
-event and prints the capture-active state. It does not start or stop GStreamer
-and does not call `VIDIOC_STREAMON`. It compiles locally with the Ubuntu C
-compiler and strict warnings enabled. It has not yet been run against a V4L2
-node or the Surface camera. Live testing needs Robert present with the
-elevated `surf7cam-test` tmux session available.
+The prototype has two user-space components. `prototypes/v4l2loopback-client-watch.c`
+subscribes to the v4l2loopback `CLIENT_USAGE` event and prints the
+capture-active state. `prototypes/on-demand-gstreamer-controller.py` watches
+those events, starts the existing `libcamerasrc` capture settings on active
+capture, and stops that GStreamer process after an idle grace period. The
+controller only writes to a pre-existing named FIFO; it refuses a regular
+file path. Both sources pass local compiler/syntax checks. Neither has been
+run against a V4L2 node or the Surface camera. Live testing needs Robert
+present with the elevated `surf7cam-test` tmux session available.
 
 ## Why this design
 
@@ -64,13 +66,13 @@ Cheese / Firefox / Brave / Opera requests V4L2 capture
 v4l2loopback CLIENT_USAGE event: capture active
         |
         v
-small controller starts the existing GStreamer/libcamera service
+controller starts libcamerasrc -> convert/scale -> named FIFO
         |
         v
-Surface front sensor -> IPU4P -> libcamerasrc -> v4l2sink -> /dev/video83
+idle relay reads FIFO -> v4l2loopback -> /dev/video83
         |
         v
-client stops capture -> event reports inactive -> grace timer -> stop service
+client stops capture -> event reports inactive -> grace timer -> stop GStreamer
 ~~~
 
 The virtual node must stay discoverable with no producer, and the producer
@@ -125,30 +127,31 @@ unchanged and implement any GStreamer adaptation in a separate prototype.
    Cheese and browsers discover the camera before live frames exist, and
    whether GStreamer can attach after `STREAMON`. Keep `/dev/video83` and its
    current producer untouched during this phase.
-3. **On-demand controller:** only after the event and node behavior are
-   confirmed, add a controller that starts the existing GStreamer service on
-   active capture and stops it after a grace period. Keep system changes behind
-   the existing backup and rollback protections.
+3. **On-demand controller:** the initial Python controller is now present. It
+   starts the GStreamer/libcamera source on active capture and stops it after a
+   configurable grace period (2 seconds by default). It expects the idle relay
+   to own `/dev/video83` and the FIFO to exist first. Review and exercise this
+   only after event delivery and FIFO/relay compatibility are confirmed; keep
+   system changes behind the existing backup and rollback protections.
 4. **User-visible acceptance:** with Robert present, test Cheese, Firefox,
    Brave, Opera, and WebcamTests.com. For each, record camera discovery,
    actual non-black frames, orientation, LED-on while capturing, and LED-off
    after the last client stops. Also test two clients, permission denial,
    abrupt client exit, and application startup latency.
 
-No camera test has been performed for this prototype yet. Do not report the
-event observer as an on-demand camera implementation or as proof that the LED
-turns off. If the `CLIENT_USAGE` event is absent or unsuitable in the installed
-module, evaluate a minimal DKMS event patch before considering a new V4L2
-driver.
+No camera or runtime test has been performed for this prototype yet. The
+controller is not an accepted on-demand camera implementation and does not
+prove the LED turns off. If the `CLIENT_USAGE` event is absent or unsuitable in
+the installed module, evaluate a minimal DKMS event patch before considering a
+new V4L2 driver.
 
 ## Build and later live observation
 
 Build, without installing anything:
 
 ~~~sh
-cc -O2 -Wall -Wextra -Werror \
-  -o /tmp/surface7-v4l2-client-watch \
-  prototypes/v4l2loopback-client-watch.c
+cc -O2 -Wall -Wextra -Werror -o /tmp/surface7-v4l2-client-watch prototypes/v4l2loopback-client-watch.c
+python3 -c 'from pathlib import Path; compile(Path("prototypes/on-demand-gstreamer-controller.py").read_text(), "on-demand-gstreamer-controller.py", "exec")'
 ~~~
 
 When Robert is present and the selected device is confirmed to be the
@@ -164,11 +167,25 @@ ordinary access to the video device; do not run Cheese or a browser through
 check. Switching to an idle sensor or testing module settings requires an
 explicit rollback plan and the user's elevated tmux session.
 
+The controller can be invoked only after a disposable idle relay is running
+and the named FIFO exists. For a manual prototype session, source the checked
+in camera settings and pass them explicitly:
+
+~~~sh
+source config/front-camera.env
+python3 prototypes/on-demand-gstreamer-controller.py --watcher /tmp/surface7-v4l2-client-watch --device "$DEVICE" --fifo /run/surface7-ubuntu-frontcamera/front.fifo --camera-name "$CAMERA_NAME" --source-width "$SOURCE_WIDTH" --source-height "$SOURCE_HEIGHT" --source-fps-num "$SOURCE_FPS_NUM" --source-fps-den "$SOURCE_FPS_DEN" --output-width "$OUTPUT_WIDTH" --output-height "$OUTPUT_HEIGHT" --output-fps-num "$OUTPUT_FPS_NUM" --output-fps-den "$OUTPUT_FPS_DEN"
+~~~
+
+This command is an example for a later, supervised runtime test. It is not a
+deployment command and cannot work until a relay has created and opened the
+FIFO. No systemd unit or host configuration is included in this prototype.
+
 ## Rollback boundary
 
 The files on this branch are not deployed. Removing the observer binary and
-ending the process restores its entire local effect. The running camera
-service, module configuration, loaded kernel modules, packages, and system
-files remain unchanged. Any later controller or device-configuration change
-must first be covered by `scripts/rollback.sh`, and this branch must remain
-experimental until all four applications and the LED behavior pass live tests.
+ending the controller/watcher processes restores their entire local effect.
+The running camera service, module configuration, loaded kernel modules,
+packages, and system files remain unchanged. Any later controller or
+device-configuration change must first be covered by `scripts/rollback.sh`,
+and this branch must remain experimental until all four applications and the
+LED behavior pass live tests.
