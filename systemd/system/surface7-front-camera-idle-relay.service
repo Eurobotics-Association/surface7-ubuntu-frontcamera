@@ -1,0 +1,22 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+[Unit]
+Description=Surface Pro 7 V4L2 idle relay
+Requires=sp7-camera-boot.service
+After=systemd-modules-load.service sp7-camera-boot.service
+ConditionPathExists=/dev/video83
+StartLimitIntervalSec=60
+StartLimitBurst=3
+
+[Service]
+Type=simple
+RuntimeDirectory=surface7-ubuntu-frontcamera
+RuntimeDirectoryMode=0755
+ExecStartPre=/usr/bin/mkfifo --mode=0600 /run/surface7-ubuntu-frontcamera/front.fifo
+ExecStart=/usr/local/libexec/surface7-v4l2-idle-relay /dev/video83 /run/surface7-ubuntu-frontcamera/front.fifo 1280 720 30 1
+Restart=on-failure
+RestartSec=2
+TimeoutStopSec=5
+KillMode=control-group
+
+[Install]
+WantedBy=multi-user.target

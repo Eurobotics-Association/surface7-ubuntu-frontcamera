@@ -4,6 +4,13 @@ set -euo pipefail
 ROOT="$(cd -- "$(dirname -- "$0")/.." && pwd)"
 source "$ROOT/config/ubuntu.env"
 
+MODE="${1:-full}"
+case "$MODE" in
+    full|--full) MODE=full ;;
+    --previous-deployment) MODE=previous ;;
+    *) echo "Usage: $0 [--previous-deployment|--full]" >&2; exit 2 ;;
+esac
+
 [[ $EUID -ne 0 ]] || { echo "Run as your desktop user; rollback will ask sudo." >&2; exit 1; }
 marker="$SURFACE7_LIBDIR/.surface7-ubuntu-frontcamera-owned"
 expected_marker="$(cat "$ROOT/config/ownership-marker")"
@@ -28,33 +35,6 @@ fi
 if [[ ! "$deployed_kernel" =~ ^[A-Za-z0-9._+-]+$ ]]; then
     echo "Refusing rollback: deployment kernel record is invalid." >&2
     exit 1
-fi
-
-dkms_package="surface7-ubuntu-frontcamera"
-dkms_version="0.1.0"
-dkms_source="/usr/src/${dkms_package}-${dkms_version}"
-dkms_registration="/var/lib/dkms/${dkms_package}/${dkms_version}"
-expected_source_marker="$(cat "$ROOT/config/ownership-marker")"
-if sudo test -e "$dkms_source"; then
-    source_marker="$dkms_source/.surface7-ubuntu-frontcamera-owned"
-    if ! command -v dkms >/dev/null 2>&1; then
-        echo "Refusing rollback: dkms is required to remove the registered modules safely." >&2
-        exit 1
-    fi
-
-    if sudo test -f "$source_marker"; then
-        if [[ "$(sudo cat "$source_marker")" != "$expected_source_marker" ]]; then
-            echo "Refusing rollback: DKMS source ownership marker does not match this project." >&2
-            exit 1
-        fi
-    elif sudo test -e "$dkms_registration"; then
-        echo "Refusing rollback: unmarked DKMS source has a registered module; refusing to remove it." >&2
-        exit 1
-    fi
-
-    if sudo test -e "$dkms_registration"; then
-        sudo dkms remove -m "$dkms_package" -v "$dkms_version" --all
-    fi
 fi
 
 backup="$SURFACE7_BACKUP_ROOT/$deployed_kernel"
@@ -94,19 +74,116 @@ restore_unit_enablement() {
     esac
 }
 
+if [[ "$MODE" == previous ]]; then
+    previous="$backup/pre-on-demand"
+    if ! sudo test -f "$previous/.complete" ||
+       [[ "$(sudo cat "$previous/.complete")" != "surface7-pre-on-demand-v1" ]]; then
+        echo "Refusing previous-deployment rollback: the one-time snapshot is missing or incomplete." >&2
+        exit 1
+    fi
+
+    sudo systemctl disable --now surface7-front-camera-on-demand.service 2>/dev/null || true
+    sudo systemctl disable --now surface7-front-camera-idle-relay.service 2>/dev/null || true
+    sudo systemctl disable --now surface7-front-camera.timer 2>/dev/null || true
+    sudo systemctl stop surface7-front-camera.service 2>/dev/null || true
+
+    previous_files=(
+        /usr/local/libexec/surface7-front-camera
+        /usr/local/libexec/surface7-v4l2-idle-relay
+        /usr/local/libexec/surface7-v4l2-client-watch
+        /usr/local/libexec/surface7-front-camera-controller.py
+        /etc/default/surface7-front-camera
+        /etc/systemd/system/surface7-front-camera.service
+        /etc/systemd/system/surface7-front-camera.timer
+        /etc/systemd/system/surface7-front-camera-idle-relay.service
+        /etc/systemd/system/surface7-front-camera-on-demand.service
+    )
+    for path in "${previous_files[@]}"; do
+        saved="$previous$path"
+        if sudo test -e "$saved" || sudo test -L "$saved"; then
+            sudo rm -f "$path"
+            sudo mkdir -p "$(dirname -- "$path")"
+            sudo cp -a "$saved" "$path"
+            printf 'Restored previous deployment file %s\n' "$path"
+        elif sudo test -e "$path" || sudo test -L "$path"; then
+            sudo rm -f "$path"
+            printf 'Removed on-demand file %s\n' "$path"
+        fi
+    done
+
+    sudo systemctl daemon-reload
+    for unit in surface7-front-camera.service surface7-front-camera.timer \
+        surface7-front-camera-idle-relay.service surface7-front-camera-on-demand.service; do
+        state_file="$previous/systemd-state/$unit"
+        state=disabled
+        if sudo test -f "$state_file"; then state="$(sudo cat "$state_file")"; fi
+        restore_unit_enablement "$unit" "$state"
+    done
+    sudo systemctl daemon-reload
+    for unit in surface7-front-camera.service surface7-front-camera.timer \
+        surface7-front-camera-idle-relay.service surface7-front-camera-on-demand.service; do
+        state_file="$previous/systemd-active/$unit"
+        if sudo test -f "$state_file" &&
+           [[ "$(sudo cat "$state_file")" == active ]] &&
+           sudo test -f "/etc/systemd/system/$unit"; then
+            sudo systemctl start "$unit"
+        fi
+    done
+
+    printf '\nPrevious camera-service deployment restored from %s\n' "$previous"
+    printf 'DKMS modules, firmware, packages, and camera hardware configuration were left in place.\n'
+    exit 0
+fi
+
 front_state="$(saved_unit_state surface7-front-camera.service)"
 boot_state="$(saved_unit_state sp7-camera-boot.service)"
 timer_state="$(saved_unit_state surface7-front-camera.timer)"
+relay_state="$(saved_unit_state surface7-front-camera-idle-relay.service)"
+ondemand_state="$(saved_unit_state surface7-front-camera-on-demand.service)"
+sudo systemctl disable --now surface7-front-camera-on-demand.service 2>/dev/null || true
+sudo systemctl disable --now surface7-front-camera-idle-relay.service 2>/dev/null || true
 sudo systemctl disable --now surface7-front-camera.timer 2>/dev/null || true
 sudo systemctl disable --now surface7-front-camera.service 2>/dev/null || true
 sudo systemctl disable --now sp7-camera-boot.service 2>/dev/null || true
 
+dkms_package="surface7-ubuntu-frontcamera"
+dkms_version="0.1.0"
+dkms_source="/usr/src/${dkms_package}-${dkms_version}"
+dkms_registration="/var/lib/dkms/${dkms_package}/${dkms_version}"
+expected_source_marker="$(cat "$ROOT/config/ownership-marker")"
+if sudo test -e "$dkms_source"; then
+    source_marker="$dkms_source/.surface7-ubuntu-frontcamera-owned"
+    if ! command -v dkms >/dev/null 2>&1; then
+        echo "Refusing rollback: dkms is required to remove the registered modules safely." >&2
+        exit 1
+    fi
+
+    if sudo test -f "$source_marker"; then
+        if [[ "$(sudo cat "$source_marker")" != "$expected_source_marker" ]]; then
+            echo "Refusing rollback: DKMS source ownership marker does not match this project." >&2
+            exit 1
+        fi
+    elif sudo test -e "$dkms_registration"; then
+        echo "Refusing rollback: unmarked DKMS source has a registered module; refusing to remove it." >&2
+        exit 1
+    fi
+
+    if sudo test -e "$dkms_registration"; then
+        sudo dkms remove -m "$dkms_package" -v "$dkms_version" --all
+    fi
+fi
+
 system_files=(
     /usr/local/libexec/surface7-front-camera
+    /usr/local/libexec/surface7-v4l2-idle-relay
+    /usr/local/libexec/surface7-v4l2-client-watch
+    /usr/local/libexec/surface7-front-camera-controller.py
     /usr/local/sbin/sp7-camera-boot
     /etc/default/surface7-front-camera
     /etc/systemd/system/surface7-front-camera.service
     /etc/systemd/system/surface7-front-camera.timer
+    /etc/systemd/system/surface7-front-camera-idle-relay.service
+    /etc/systemd/system/surface7-front-camera-on-demand.service
     /etc/modprobe.d/ipu4p.conf
     /etc/modprobe.d/sp7-v4l2loopback.conf
     /etc/modules-load.d/sp7-v4l2loopback.conf
@@ -157,6 +234,8 @@ sudo systemctl daemon-reload
 restore_unit_enablement surface7-front-camera.service "$front_state"
 restore_unit_enablement sp7-camera-boot.service "$boot_state"
 restore_unit_enablement surface7-front-camera.timer "$timer_state"
+restore_unit_enablement surface7-front-camera-idle-relay.service "$relay_state"
+restore_unit_enablement surface7-front-camera-on-demand.service "$ondemand_state"
 sudo systemctl daemon-reload
 
 printf '\nRollback finished. Backups remain under %s\n' "$SURFACE7_BACKUP_ROOT"

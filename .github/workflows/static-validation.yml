@@ -9,5 +9,9 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
+      - name: Install validation dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential pkg-config libgstreamer1.0-dev gstreamer1.0-tools
       - name: Validate deployment scripts
         run: ./tests/static-validation.sh

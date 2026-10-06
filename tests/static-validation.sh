@@ -23,6 +23,13 @@ python3 -Werror::SyntaxWarning -m py_compile "$ROOT/scripts/prepare-upstream-ins
 tmp="$(mktemp -d -t surface7-static-check.XXXXXXXX)"
 trap 'rm -rf "$tmp"' EXIT
 
+cc -O2 -Wall -Wextra -Werror -o "$tmp/client-watch" \
+    "$ROOT/prototypes/v4l2loopback-client-watch.c"
+cc -O2 -Wall -Wextra -Werror -o "$tmp/idle-relay" \
+    "$ROOT/upstream/surface-pro-7-camera/src/sp7-camera-relay.c"
+python3 -c 'from pathlib import Path; compile(Path("'"$ROOT"'/prototypes/on-demand-gstreamer-controller.py").read_text(), "on-demand-gstreamer-controller.py", "exec")'
+
+
 provider_plugin="$tmp/provider/libgstsurface7v4l2camera.so"
 bash "$ROOT/scripts/build-gstreamer-provider.sh" "$provider_plugin"
 GST_PLUGIN_PATH="$tmp/provider" \
@@ -123,17 +130,23 @@ grep -Fq 'dkms_registration="/var/lib/dkms/${dkms_package}/${dkms_version}"' \
 grep -Fq 'deployment-kernel' "$ROOT/scripts/install.sh"
 grep -Fq 'sudo install -m 0755 "$ROOT/scripts/rollback.sh"' "$ROOT/scripts/install.sh"
 grep -Fq 'sudo install -m 0644 "$ROOT/config/ubuntu.env"' "$ROOT/scripts/install.sh"
-grep -Fq 'Rollback command: %s/scripts/rollback.sh' "$ROOT/scripts/install.sh"
+grep -Fq 'Full product rollback: %s/scripts/rollback.sh' "$ROOT/scripts/install.sh"
 grep -Fq 'persistent rollback helper' "$ROOT/scripts/install.sh"
 grep -Fq 'KEEP_TMP=1' "$ROOT/scripts/install-from-github.sh"
 grep -Fq 'source checkout retained at' "$ROOT/scripts/install-from-github.sh"
 grep -Fq 'deployed_kernel="$(sudo cat "$deployment_kernel_marker")"' "$ROOT/scripts/rollback.sh"
-grep -Fq 'backup_once "/etc/systemd/system/$unit"' "$ROOT/scripts/deploy-services.sh"
-grep -Fq 'systemctl enable surface7-front-camera.timer' "$ROOT/scripts/deploy-services.sh"
-if grep -Fq 'systemctl disable --now' "$ROOT/scripts/deploy-services.sh"; then
-    echo "Service-only deployment must not stop currently running camera processes." >&2
-    exit 1
-fi
+grep -Fq 'for path in "${system_files[@]}"; do backup_once "$path"; done' "$ROOT/scripts/deploy-services.sh"
+grep -Fq 'systemctl enable surface7-front-camera-idle-relay.service' "$ROOT/scripts/deploy-services.sh"
+grep -Fq 'systemctl enable surface7-front-camera-on-demand.service' "$ROOT/scripts/deploy-services.sh"
+grep -Fq 'systemctl disable --now surface7-front-camera.timer' "$ROOT/scripts/deploy-services.sh"
+grep -Fq 'systemctl stop surface7-front-camera.service' "$ROOT/scripts/deploy-services.sh"
+grep -Fq 'pre-on-demand' "$ROOT/scripts/deploy-services.sh"
+grep -Fq -- '--previous-deployment' "$ROOT/scripts/rollback.sh"
+grep -Fq 'capture_active=%u' "$ROOT/prototypes/v4l2loopback-client-watch.c"
+grep -Fq 'capture_active=([01])' "$ROOT/prototypes/on-demand-gstreamer-controller.py"
+grep -Fq 'single initialization frame' "$ROOT/docs/on-demand-v4l2-prototype.md"
+grep -Fq 'BindsTo=surface7-front-camera-idle-relay.service' \
+    "$ROOT/systemd/system/surface7-front-camera-on-demand.service"
 
 if grep -Eiq 'pipewiresrc|pipewire\.service|wireplumber\.service|libspa-libcamera|systemctl --user' "$adapted"; then
     echo "Adapted deployment still contains a desktop camera bridge path." >&2

@@ -1,0 +1,21 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+[Unit]
+Description=Surface Pro 7 front camera on-demand GStreamer controller
+Requires=sp7-camera-boot.service surface7-front-camera-idle-relay.service
+BindsTo=surface7-front-camera-idle-relay.service
+After=sp7-camera-boot.service surface7-front-camera-idle-relay.service
+ConditionPathExists=/dev/video83
+StartLimitIntervalSec=60
+StartLimitBurst=3
+
+[Service]
+Type=simple
+EnvironmentFile=/etc/default/surface7-front-camera
+ExecStart=/usr/bin/python3 /usr/local/libexec/surface7-front-camera-controller.py --watcher /usr/local/libexec/surface7-v4l2-client-watch --device ${DEVICE} --fifo /run/surface7-ubuntu-frontcamera/front.fifo --camera-name ${CAMERA_NAME} --source-width ${SOURCE_WIDTH} --source-height ${SOURCE_HEIGHT} --source-fps-num ${SOURCE_FPS_NUM} --source-fps-den ${SOURCE_FPS_DEN} --output-width ${OUTPUT_WIDTH} --output-height ${OUTPUT_HEIGHT} --output-fps-num ${OUTPUT_FPS_NUM} --output-fps-den ${OUTPUT_FPS_DEN}
+Restart=on-failure
+RestartSec=2
+TimeoutStopSec=15
+KillMode=control-group
+
+[Install]
+WantedBy=multi-user.target

@@ -29,11 +29,14 @@
 - The user reports that the Surface fan may not engage when needed. Investigate thermal sensors, cooling devices, fan reporting, and relevant Ubuntu/kernel services separately; start with read-only diagnostics and do not change fan controls or install thermal-management software without an approved plan.
 - Thermal handling during compile/testing: continue at readings up to and including 95°C. If any observed reading is above 95°C, pause heavy work for 3 minutes, then resume while continuing to monitor. The user says the firmware will vent the heat; no permanent stop is required at that threshold.
 
-## GStreamer desktop discovery status — 6 October 2026
+## On-demand V4L2 camera behavior — 6 October 2026
 
-- The ordinary GStreamer monitor omits the Surface loopback because the default V4L2 provider is hidden by the installed libcamera provider. A process-local interposition probe confirmed this behavior.
-- Do not globally unhide the V4L2 provider or deploy the temporary LD_PRELOAD shim: it also exposes raw IPU camera endpoints.
-- A temporary scoped provider prototype exposed only the labeled Surface loopback and its v4l2src io-mode=rw path read five frames, but the provider-created capture test emitted GStreamer critical warnings from the V4L2 plugin. The prototype is not installed or committed. Resolve the warnings and test Cheese in the user's desktop session before packaging or claiming app support.
+- The old `surface7-front-camera.service` ran the physical GStreamer/libcamera capture continuously, which kept the front camera LED lit. Robert authorized stopping it; the service is now stopped, its timer disabled, and Robert confirmed the LED went out. Do not re-enable the old service or timer as part of on-demand deployment.
+- The pinned v4l2loopback v0.15.4 `CLIENT_USAGE` event payload is Boolean: 0 means capture idle and 1 means capture active. It is not an app identity or multi-client count. The watcher subscribes to that state; treat `ENOENT` from nonblocking event dequeue as an empty queue.
+- The on-demand design reuses the pinned, unmodified `sp7-camera-relay.c`: it writes one initialization frame, then waits on the FIFO without repeating idle frames. The controller starts the existing GStreamer/libcamera pipeline on capture-active and stops it after the grace period.
+- Only deploy the new idle-relay and controller services after `scripts/rollback.sh --previous-deployment` has coverage for every replaced service, binary, config, and enablement state. Keep a one-time previous-deployment snapshot.
+- Full acceptance requires real moving frames, capture-stop behavior, and the camera LED turning off when the final app closes. Test Cheese, Firefox, Brave, Opera, and WebcamTests.com separately; record discovery, orientation, live frames, and post-stop idle state.
+- Robert confirmed the LED went out when the all-time pipeline was stopped without a reboot. The on-demand relay/controller still require live validation before support claims change.
 
 ## Source and validation
 

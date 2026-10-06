@@ -14,14 +14,21 @@ for arg in "$@"; do
             [[ -z "$MODE" ]] || { echo "Choose one operation." >&2; exit 2; }
             MODE=install
             ;;
+        --deploy-services)
+            [[ -z "$MODE" ]] || { echo "Choose one operation." >&2; exit 2; }
+            MODE=deploy
+            ;;
         -h|--help)
             cat <<'EOF'
 Usage:
   ./scripts/install.sh --build-only
   ./scripts/install.sh --install
+  ./scripts/install.sh --deploy-services
 
 --build-only targets the currently running Ubuntu kernel and makes no system changes.
---install requires that kernel to be running and asks sudo for system deployment.
+--install deploys a fresh DKMS stack or updates an existing project-owned deployment.
+--deploy-services updates the on-demand camera services without rebuilding kernel modules.
+Both install modes ask sudo when system changes are required.
 EOF
             exit 0
             ;;
@@ -40,6 +47,11 @@ else
     "$ROOT/scripts/check-system.sh"
 fi
 
+if [[ "$MODE" == deploy ]]; then
+    "$ROOT/scripts/deploy-services.sh"
+    exit $?
+fi
+
 if [[ "$MODE" == install ]]; then
     if [[ $EUID -eq 0 ]]; then
         echo "Run as your desktop user; the installer will ask sudo when required." >&2
@@ -53,9 +65,16 @@ if [[ "$MODE" == install ]]; then
     "$ROOT/scripts/check-system.sh"
     library_marker="$SURFACE7_LIBDIR/.surface7-ubuntu-frontcamera-owned"
     if [[ -e "$SURFACE7_LIBDIR" ]]; then
-        echo "A product library directory already exists at $SURFACE7_LIBDIR." >&2
-        echo "Run $SURFACE7_LIBDIR/scripts/rollback.sh or ./scripts/rollback.sh before deploying again." >&2
-        [[ -f "$library_marker" ]] || echo "It is not marked as owned by this project; do not remove it manually." >&2
+        if sudo test -f "$library_marker" &&
+           [[ "$(sudo cat "$library_marker")" == "$(cat "$ROOT/config/ownership-marker")" ]] &&
+           sudo test -f "$SURFACE7_LIBDIR/deployment-kernel" &&
+           [[ "$(sudo cat "$SURFACE7_LIBDIR/deployment-kernel")" == "$(uname -r)" ]]; then
+            echo "Updating the existing project-owned camera deployment without rebuilding kernel modules."
+            "$ROOT/scripts/deploy-services.sh"
+            exit $?
+        fi
+        echo "A product library directory already exists at $SURFACE7_LIBDIR, but its ownership or kernel record does not match." >&2
+        echo "Refusing to overwrite it. Inspect it and use its matching rollback helper if needed." >&2
         exit 1
     fi
 fi
@@ -103,5 +122,7 @@ sudo install -m 0644 "$ROOT/config/ownership-marker" \
 printf '%s\n' "$SURFACE7_TARGET_KERNEL" | sudo tee \
     "$SURFACE7_LIBDIR/deployment-kernel" >/dev/null
 "$upstream/install.sh"
-printf '\nDeployment files installed. Reboot into %s before camera validation.\n' "$SURFACE7_TARGET_KERNEL"
-printf 'Rollback command: %s/scripts/rollback.sh\n' "$SURFACE7_LIBDIR"
+"$ROOT/scripts/deploy-services.sh"
+printf '\nOn-demand camera services installed for %s.\n' "$SURFACE7_TARGET_KERNEL"
+printf 'No reboot was issued. Roll back the previous camera service with: %s/scripts/rollback.sh --previous-deployment\n' "$SURFACE7_LIBDIR"
+printf 'Full product rollback: %s/scripts/rollback.sh\n' "$SURFACE7_LIBDIR"
