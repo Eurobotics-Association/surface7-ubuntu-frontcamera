@@ -17,7 +17,7 @@ for value in CAMERA_NAME DEVICE SOURCE_WIDTH SOURCE_HEIGHT SOURCE_FPS_NUM SOURCE
 done
 
 exec gst-launch-1.0 -e \
-    libcamerasrc camera-name="$CAMERA_NAME" ae-enable=true \
+    libcamerasrc camera-name="$CAMERA_NAME" \
     ! "video/x-raw,width=$SOURCE_WIDTH,height=$SOURCE_HEIGHT,framerate=$SOURCE_FPS_NUM/$SOURCE_FPS_DEN" \
     ! queue max-size-buffers=4 max-size-bytes=0 max-size-time=0 leaky=downstream \
     ! videoconvert \

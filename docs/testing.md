@@ -11,9 +11,26 @@ LED went out. There is no camera GStreamer process running. The virtual
 `/dev/video83` node and loaded camera modules remain present. No reboot,
 module reload, or package operation was needed to stop the feed.
 
-The on-demand relay/controller implementation is on the prototype branch and
-has not yet been deployed to the host. It must pass live capture-start and
-capture-stop tests before being considered validated.
+The first on-demand deployment is now active on the host: the idle relay
+and event controller run, while the old always-on service and timer are
+inactive. At idle, no physical `gst-launch-1.0` process is running. The relay
+logs one initialization frame and then waits on its FIFO.
+
+During the first browser capture attempt, the event watcher reported capture
+active and the controller launched GStreamer, but the pipeline exited before
+producing a live image: the installed `libcamerasrc` rejects the
+`ae-enable` property. `gst-inspect-1.0 libcamerasrc` lists
+`camera-name` and `auto-focus-mode`, but no `ae-enable`. The corrected
+repository pipelines remove that unsupported property; the host needs the
+merged update and another capture test before on-demand behavior can be
+validated.
+
+The initial service migration also printed an error while copying the
+persistent rollback helper because its parent `scripts/` directory was
+missing. Service activation continued. The one-time pre-transition snapshot
+was created successfully. A follow-up hardens error handling, creates the
+helper directory, and restarts the controller on redeploy; reinstall it from
+`main` before further client acceptance testing.
 
 ## Evidence from the previous GStreamer service
 
@@ -55,11 +72,12 @@ must be tested as contention separately.
 - The watcher compiled with `cc -O2 -Wall -Wextra -Werror`.
 - The pinned vendor relay compiled with the same warning flags.
 - The Python controller passed syntax compilation.
-- The on-demand services must be checked with `systemd-analyze verify`.
+- The new and existing systemd units passed `systemd-analyze verify` in a temporary root with stubbed executable paths and standard target units.
 - `scripts/deploy-services.sh` performs package preflight, checks the running
   kernel against the deployment marker, builds into a temporary directory,
   snapshots the old service state once, disables/removes the always-on unit and
-  timer, and enables the relay/controller services.
+  timer, installs the rollback helper, and enables/restarts the relay/controller
+  services. Failures are routed through the previous-deployment rollback.
 - `scripts/rollback.sh --previous-deployment` restores the pre-transition
   service files and their enabled/active states while keeping DKMS, firmware,
   and packages. Full rollback restores the original project-level backup.

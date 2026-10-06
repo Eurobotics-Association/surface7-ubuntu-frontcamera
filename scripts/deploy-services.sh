@@ -120,15 +120,26 @@ done
 
 restore_previous_and_exit() {
     local status="$1"
+    local rollback_script="$SURFACE7_LIBDIR/scripts/rollback.sh"
     echo "On-demand deployment failed; restoring the previous camera service snapshot." >&2
-    sudo "$SURFACE7_LIBDIR/scripts/rollback.sh" --previous-deployment || {
-        echo "Automatic restoration failed. Run: $SURFACE7_LIBDIR/scripts/rollback.sh --previous-deployment" >&2
+    if ! sudo test -x "$rollback_script"; then
+        rollback_script="$ROOT/scripts/rollback.sh"
+    fi
+    "$rollback_script" --previous-deployment || {
+        echo "Automatic restoration failed. Run: $ROOT/scripts/rollback.sh --previous-deployment" >&2
     }
     exit "$status"
 }
 
+on_deploy_error() {
+    local status=$?
+    trap - ERR
+    restore_previous_and_exit "$status"
+}
+
 install_and_activate() {
     sudo install -d -m 0755 /usr/local/libexec /etc/systemd/system
+    sudo install -d -m 0755 "$SURFACE7_LIBDIR/scripts"
     sudo install -m 0755 "$tmp/surface7-v4l2-client-watch" /usr/local/libexec/surface7-v4l2-client-watch
     sudo install -m 0755 "$tmp/surface7-v4l2-idle-relay" /usr/local/libexec/surface7-v4l2-idle-relay
     sudo install -m 0755 "$ROOT/prototypes/on-demand-gstreamer-controller.py" \
@@ -151,7 +162,7 @@ install_and_activate() {
     sudo systemctl enable surface7-front-camera-on-demand.service || return 1
     if [[ -e /dev/video83 ]]; then
         sudo systemctl start surface7-front-camera-idle-relay.service || return 1
-        sudo systemctl start surface7-front-camera-on-demand.service || return 1
+        sudo systemctl restart surface7-front-camera-on-demand.service || return 1
         sudo systemctl is-active --quiet surface7-front-camera-idle-relay.service || return 1
         sudo systemctl is-active --quiet surface7-front-camera-on-demand.service || return 1
     else
@@ -159,12 +170,9 @@ install_and_activate() {
     fi
 }
 
-if install_and_activate; then
-    :
-else
-    status=$?
-    restore_previous_and_exit "$status"
-fi
+trap on_deploy_error ERR
+install_and_activate
+trap - ERR
 
 sleep 2
 if pgrep -x 'gst-launch-1.0' >/dev/null 2>&1; then

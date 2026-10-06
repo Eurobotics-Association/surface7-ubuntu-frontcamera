@@ -80,7 +80,6 @@ def gst_command(args: argparse.Namespace) -> list[str]:
         "-e",
         "libcamerasrc",
         f"camera-name={args.camera_name}",
-        "ae-enable=true",
         "!",
         source_caps,
         "!",
