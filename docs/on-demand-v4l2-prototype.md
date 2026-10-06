@@ -5,23 +5,24 @@ Updated: 6 October 2026
 ## Status
 
 This branch implements an experimental on-demand camera path for the Surface
-Pro 7 front RGB camera. It keeps the V4L2 camera node discoverable without
-running the physical sensor pipeline continuously.
+Pro 7 front RGB camera. It keeps the V4L2 node discoverable without running
+the physical sensor pipeline continuously.
 
-The observer was tested against the installed `/dev/video83`: the in-app
-WebcamTests page and Cheese caused `CLIENT_USAGE` transitions, and both
-returned to idle after capture ended. Cheese and browser image capture worked
-on the existing always-on producer. Robert confirmed that the Cheese preview
-was upright. The currently installed always-on systemd service has since been
-stopped, its boot timer disabled, and Robert confirmed the white camera LED
-went out; no reboot or module reload was needed.
+The idle relay and event controller are installed on Robert's Surface 7. The
+old always-on service is stopped, its boot timer disabled, and the physical
+GStreamer process stops at idle. Robert confirmed that the white front-camera
+LED has gone out. The relay writes a single initialization frame and then
+waits; it does not generate a repeating idle video stream.
 
-The relay/controller is deployed. Its first browser capture request
-reached the watcher and controller, but GStreamer exited before producing a
-live frame because the maintained command passed `ae-enable=true`, a property
-not supported by this host's installed `libcamerasrc`. The corrected source
-removes the unsupported property. Re-deploy and repeat live frame and stop
-tests before calling this implementation validated.
+Live capture through the on-demand controller is not yet validated. The first
+attempt exited because the pipeline specified unsupported `ae-enable`; that
+was removed. The next attempt used Ubuntu's stock `libcamerasrc` plugin
+(version 0.2.0), which found no camera. The kernel media graph did show the
+OV5693 sensor and enabled link, and the former always-on service explicitly
+selected the Surface-built libcamera 0.7.2 plugin. This branch now sets that
+product plugin path and a fresh GStreamer registry in the on-demand service,
+and its deployment preflight checks that the plugin loads. Merge, reinstall,
+and successful moving-frame plus idle-stop tests are still required.
 
 ## Why on-demand
 
@@ -149,11 +150,21 @@ manual, separately authorized action.
 - **Always-on stop:** after stopping `surface7-front-camera.service` and
   disabling its timer, no `gst-launch-1.0` process remained. Robert
   confirmed the white LED went out. No reboot or module reload was performed.
-- **First on-demand request:** the internal browser's capture request reached
-  the watcher/controller. GStreamer exited immediately with
-  `no property "ae-enable" in element "libcamerasrc"`; no live image was
-  established from this request. The repository removes that option, but the
-  corrected version still needs deployment and live validation.
+- **First on-demand request:** the internal browser request reached the
+  watcher/controller. GStreamer exited because the installed source does not
+  support `ae-enable`; the merged source removed that property.
+- **Second on-demand request:** after that correction, the unit loaded Ubuntu's
+  stock `libcamerasrc` 0.2.0 and reported that it could not find the configured
+  camera. The enabled OV5693 media-graph link was present. The old always-on
+  unit selected the product-built plugin at
+  `/usr/local/lib/surface7-ubuntu-frontcamera/gstreamer-1.0`; the new unit had
+  omitted that environment. This branch adds the product `GST_PLUGIN_PATH`,
+  a runtime-scoped `GST_REGISTRY`, and a preflight load check.
+- **Current fix status:** static checks and live deployment still pending.
+  Do not count camera enumeration as a captured image: the on-demand path has
+  not yet produced a verified live frame. After merge/reinstall, repeat
+  WebcamTests.com and Cheese capture, verify orientation and moving frames,
+  then close each client and verify the physical process and LED return to idle.
 - **Migration helper issue:** the first install could not copy the persistent
   rollback helper because `$SURFACE7_LIBDIR/scripts` did not exist. The
   deployment continued, while the one-time previous-deployment snapshot was
