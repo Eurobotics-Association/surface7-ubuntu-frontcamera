@@ -128,6 +128,7 @@ restore_previous_and_exit() {
 }
 
 install_and_activate() {
+    sudo install -d -m 0755 /usr/local/libexec /etc/systemd/system
     sudo install -m 0755 "$tmp/surface7-v4l2-client-watch" /usr/local/libexec/surface7-v4l2-client-watch
     sudo install -m 0755 "$tmp/surface7-v4l2-idle-relay" /usr/local/libexec/surface7-v4l2-idle-relay
     sudo install -m 0755 "$ROOT/prototypes/on-demand-gstreamer-controller.py" \
