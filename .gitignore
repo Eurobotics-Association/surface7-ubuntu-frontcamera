@@ -11,3 +11,4 @@ modules.order
 __pycache__/
 .pytest_cache/
 .venv/
+/.work/
