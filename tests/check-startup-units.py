@@ -27,6 +27,7 @@ with tempfile.TemporaryDirectory() as tmp:
         # Verify syntax/order using real systemd parser. Substitute only commands
         # unavailable before deployment; all dependencies/conditions stay intact.
         text = text.replace('/usr/local/sbin/surface7-camera', '/usr/bin/true')
+        text = text.replace('/usr/local/libexec/surface7-v4l2-idle-relay', '/usr/bin/true')
         if unit.endswith('.timer'):
             # Retired file intentionally has no timer trigger; deployment masks it.
             continue
