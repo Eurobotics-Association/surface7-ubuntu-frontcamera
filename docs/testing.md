@@ -1,3 +1,5 @@
+> **10 October 2026:** Startup policy has changed. Older boot-enable, timer and rollback commands below are historical. Use [the explicit-start design and exact plan](explicit-start.md). This revision is not deployed or camera-tested.
+
 # Camera testing and acceptance
 
 Updated: 6 October 2026, 23:50 CEST

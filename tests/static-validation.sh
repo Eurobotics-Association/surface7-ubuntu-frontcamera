@@ -3,6 +3,7 @@
 set -euo pipefail
 
 ROOT="$(cd -- "$(dirname -- "$0")/.." && pwd)"
+[[ -f /lib/modules/$(uname -r)/build/Makefile ]] || { echo "Matching running-kernel headers missing" >&2; exit 1; }
 EXPECTED_UPSTREAM_SHA=e389583af1cf99a46e51377332b95236f153737e4685f8a171a4aabb2390ef6b
 actual_sha="$(sha256sum "$ROOT/upstream/surface-pro-7-camera/install.sh" | awk '{print $1}')"
 [[ "$actual_sha" == "$EXPECTED_UPSTREAM_SHA" ]] || {
@@ -102,10 +103,13 @@ grep -Fq 'sudo install -D -m 0755' "$adapted"
 grep -Fq 'record_unit_enablement_state surface7-front-camera.service' "$adapted"
 grep -Fq 'record_unit_enablement_state sp7-camera-boot.service' "$adapted"
 grep -Fq 'record_unit_enablement_state surface7-front-camera.timer' "$adapted"
-grep -Fq 'OnBootSec=60s' "$tmp/upstream/ubuntu-deployment/surface7-front-camera.timer"
-grep -Fq 'systemctl enable surface7-front-camera.timer' "$adapted"
-if grep -Fq 'systemctl enable surface7-front-camera.service' "$adapted"; then
-    echo "Front camera service must start via its delayed boot timer." >&2
+if grep -Eq 'systemctl enable .*camera' "$adapted"; then
+    echo "Adapted installer must not enable a camera boot path." >&2
+    exit 1
+fi
+grep -Fq 'install intel_ipu4p /bin/false' "$tmp/upstream/config/modprobe.d/ipu4p.conf"
+if grep -Eq '^[[:space:]]*v4l2loopback([[:space:]]|$)' "$tmp/upstream/config/modules-load.d/sp7-v4l2loopback.conf"; then
+    echo "Adapted installer still autoloads the virtual camera." >&2
     exit 1
 fi
 grep -Fq 'sudo dkms add -m "$DKMS_PACKAGE" -v "$DKMS_VERSION"' "$adapted"
@@ -135,21 +139,8 @@ grep -Fq 'persistent rollback helper' "$ROOT/scripts/install.sh"
 grep -Fq 'KEEP_TMP=1' "$ROOT/scripts/install-from-github.sh"
 grep -Fq 'source checkout retained at' "$ROOT/scripts/install-from-github.sh"
 grep -Fq 'deployed_kernel="$(sudo cat "$deployment_kernel_marker")"' "$ROOT/scripts/rollback.sh"
-grep -Fq 'for path in "${system_files[@]}"; do backup_once "$path"; done' "$ROOT/scripts/deploy-services.sh"
-grep -Fq 'systemctl enable surface7-front-camera-idle-relay.service' "$ROOT/scripts/deploy-services.sh"
-grep -Fq 'systemctl enable surface7-front-camera-on-demand.service' "$ROOT/scripts/deploy-services.sh"
-grep -Fq 'systemctl restart surface7-front-camera-on-demand.service' "$ROOT/scripts/deploy-services.sh"
-grep -Fq 'systemctl disable --now surface7-front-camera.timer' "$ROOT/scripts/deploy-services.sh"
-grep -Fq 'systemctl stop surface7-front-camera.service' "$ROOT/scripts/deploy-services.sh"
-grep -Fq 'pre-on-demand' "$ROOT/scripts/deploy-services.sh"
-grep -Fq -- '--previous-deployment' "$ROOT/scripts/rollback.sh"
-grep -Fq 'sudo install -d -m 0755 "$SURFACE7_LIBDIR/scripts"' "$ROOT/scripts/deploy-services.sh"
-grep -Fq 'trap on_deploy_error ERR' "$ROOT/scripts/deploy-services.sh"
-grep -Fq '"$rollback_script" --previous-deployment' "$ROOT/scripts/deploy-services.sh"
-if grep -Fq 'sudo "$SURFACE7_LIBDIR/scripts/rollback.sh" --previous-deployment' "$ROOT/scripts/deploy-services.sh"; then
-    echo "Automatic rollback must run as the desktop user so its sudo checks work." >&2
-    exit 1
-fi
+python3 "$ROOT/tests/test-startup-policy.py"
+python3 "$ROOT/tests/check-startup-units.py"
 grep -Fq 'capture_active=%u' "$ROOT/prototypes/v4l2loopback-client-watch.c"
 grep -Fq 'capture_active=([01])' "$ROOT/prototypes/on-demand-gstreamer-controller.py"
 if grep -Fq 'ae-enable=true' "$ROOT/prototypes/on-demand-gstreamer-controller.py" "$ROOT/scripts/surface7-front-camera"; then
@@ -160,9 +151,6 @@ grep -Fq 'Environment=GST_PLUGIN_PATH=/usr/local/lib/surface7-ubuntu-frontcamera
     "$ROOT/systemd/system/surface7-front-camera-on-demand.service"
 grep -Fq 'Environment=GST_REGISTRY=/run/surface7-ubuntu-frontcamera/gstreamer-registry.bin' \
     "$ROOT/systemd/system/surface7-front-camera-on-demand.service"
-grep -Fq 'GST_PLUGIN_PATH="$gstreamer_plugin_dir"' "$ROOT/scripts/deploy-services.sh"
-grep -Fq 'GST_REGISTRY="$tmp/gstreamer-registry.bin"' "$ROOT/scripts/deploy-services.sh"
-grep -Fq 'libgstlibcamera.so' "$ROOT/scripts/deploy-services.sh"
 grep -Fq 'single initialization frame' "$ROOT/docs/on-demand-v4l2-prototype.md"
 grep -Fq 'BindsTo=surface7-front-camera-idle-relay.service' \
     "$ROOT/systemd/system/surface7-front-camera-on-demand.service"

@@ -51,3 +51,11 @@
 - Deployment scripts and documentation must not claim that systemd startup, a device node, an LED, negotiated caps, or one client's success proves the full application matrix.
 - The README quick install is the supported public entry point. Keep install/update, rollback, known failures, and the exact current test matrix documented.
 - Do not change Surface 5 files.
+
+## Explicit startup policy (10 October 2026)
+
+- Physical IPU4P and virtual v4l2loopback must remain unloaded throughout boot. No camera boot timer, network trigger or automatic login start.
+- Prefer explicit `sudo surface7-camera start` after an interactive user login; never bypass the per-boot failure latch to retry firmware errors.
+- Deployment, packages, service/module changes, camera tests and reboot each require explicit approval for the current task. Repository edits and hardware-free static checks may proceed.
+- Follow docs/explicit-start.md. Snapshot all newer and legacy unit states and affected initrds before deployment; preserve original backups and do not overwrite unrelated files.
+- Keep CPU/power controls unchanged during the camera/boot comparison. Compare monotonic timestamps, not early wall-clock dates.

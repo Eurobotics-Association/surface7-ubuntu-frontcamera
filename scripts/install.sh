@@ -53,6 +53,11 @@ if [[ "$MODE" == deploy ]]; then
 fi
 
 if [[ "$MODE" == install ]]; then
+    if [[ ! -f "$SURFACE7_LIBDIR/.surface7-ubuntu-frontcamera-owned" ]]; then
+        echo 'Fresh hardware installation is paused pending separate DKMS/boot-policy acceptance.' >&2
+        echo 'Use --build-only for source validation. Existing owned deployments can use --deploy-services.' >&2
+        exit 1
+    fi
     if [[ $EUID -eq 0 ]]; then
         echo "Run as your desktop user; the installer will ask sudo when required." >&2
         exit 1
@@ -61,7 +66,6 @@ if [[ "$MODE" == install ]]; then
         echo "Installation requires selected kernel $SURFACE7_TARGET_KERNEL to be running." >&2
         exit 1
     fi
-    "$ROOT/scripts/install-build-deps.sh"
     "$ROOT/scripts/check-system.sh"
     library_marker="$SURFACE7_LIBDIR/.surface7-ubuntu-frontcamera-owned"
     if [[ -e "$SURFACE7_LIBDIR" ]]; then
