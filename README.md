@@ -2,7 +2,7 @@
 
 Experimental GStreamer/libcamera → V4L2 compatibility camera for Microsoft Surface Pro 7 (not 7+), Ubuntu 24.04 x86_64 and the installed Ubuntu HWE kernel.
 
-**10 October 2026: the new design requires explicit startup after login. It must not initialize physical or virtual cameras during boot.** The startup policy was deployed on the target Surface Pro 7; clean-boot acceptance and moving-frame camera testing are pending. Already loaded camera modules remain in the current boot until a separately approved reboot.
+**10 October 2026: the new design requires explicit startup after login. It must not initialize physical or virtual cameras during boot.** One controlled reboot confirmed no camera modules, nodes or services at boot and much earlier Bluetooth input registration. The first explicit camera start failed firmware authentication and produced kernel retries; moving-frame capture has not passed. A reviewed PSYS readiness gate is required before another test.
 
 Read the [startup design, exact deployment/rollback plan and verification protocol](docs/explicit-start.md) before changing the host. There is no network-triggered, timer-triggered or automatic login startup.
 

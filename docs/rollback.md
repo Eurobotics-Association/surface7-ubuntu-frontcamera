@@ -1,4 +1,4 @@
-> **10 October 2026:** Startup policy has changed and was deployed. Older boot-enable, timer and rollback commands below are historical. Use [the explicit-start design and exact plan](explicit-start.md). Clean-boot acceptance and camera testing are pending.
+> **10 October 2026:** Startup policy was deployed and one camera-free boot was verified. The first explicit camera start failed; the PSYS-gate hotfix and its rollback are described in [the explicit-start plan](explicit-start.md). Older commands below are historical.
 
 # Rollback
 

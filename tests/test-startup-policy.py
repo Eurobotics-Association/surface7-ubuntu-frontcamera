@@ -3,6 +3,8 @@
 """Hardware-free transaction and activation regression tests."""
 import importlib.machinery
 import importlib.util
+import hashlib
+import itertools
 import json
 import os
 from pathlib import Path
@@ -23,6 +25,7 @@ def load(name, path):
     return module
 
 policy = load('policy', 'scripts/startup-policy.py')
+hotfix = load('hotfix', 'scripts/deploy-psys-gate.py')
 control = load('manual', 'scripts/surface7-camera')
 controller = load('controller', 'prototypes/on-demand-gstreamer-controller.py')
 
@@ -128,6 +131,34 @@ class SnapshotTests(unittest.TestCase):
         self.assertFalse(any(c.args[1:2] == ('start',) for c in run.call_args_list))
 
 
+class PsysGateSnapshotTests(unittest.TestCase):
+    def test_hotfix_restores_original_and_refuses_later_edits(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            base = root / 'base'
+            base.mkdir()
+            (base / '.deployed').touch()
+            target = root / 'surface7-camera'
+            source = root / 'replacement'
+            target.write_bytes(b'original reviewed helper')
+            target.chmod(0o755)
+            source.write_bytes(b'PSYS readiness gate')
+            with patch.object(hotfix, 'BACKUP', root / 'backup'), \
+                 patch.object(hotfix, 'BASE', base), \
+                 patch.object(hotfix, 'TARGET', target), \
+                 patch.object(hotfix, 'OLD_SHA256', hashlib.sha256(target.read_bytes()).hexdigest()), \
+                 patch.object(hotfix.os, 'chown'):
+                hotfix.deploy(source)
+                self.assertEqual(target.read_bytes(), source.read_bytes())
+                target.write_bytes(b'unrelated later edit')
+                with self.assertRaisesRegex(RuntimeError, 'later camera helper edit'):
+                    hotfix.rollback(False)
+                target.write_bytes(source.read_bytes())
+                hotfix.rollback(False)
+                self.assertEqual(target.read_bytes(), b'original reviewed helper')
+                self.assertTrue((root / 'backup/.restored').exists())
+
+
 class ActivationTests(unittest.TestCase):
     def test_no_terminal_refused_before_system_calls(self):
         with patch.object(control.sys.stdin, 'isatty', return_value=False), patch.object(control, 'command') as cmd:
@@ -164,6 +195,26 @@ class ActivationTests(unittest.TestCase):
              patch.object(control, 'command') as cmd:
             with self.assertRaises(RuntimeError): control.initialize()
             cmd.assert_not_called()
+
+    def test_psys_authentication_failure_never_loads_isys(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / 'requested').touch()
+            mmu = root / 'mmu-control'
+            mmu.write_text('auto\n')
+            ticks = itertools.count()
+            with patch.object(control, 'RUN', root), \
+                 patch.object(control, 'MMU1_CONTROL', mmu), \
+                 patch.object(control, 'PSYS_DRIVER', root / 'missing-driver'), \
+                 patch.object(control, 'command') as cmd, \
+                 patch.object(control.time, 'monotonic', side_effect=lambda: next(ticks)), \
+                 patch.object(control.time, 'sleep'):
+                with self.assertRaisesRegex(RuntimeError, 'ISYS left unloaded'):
+                    control.initialize()
+            loaded = [call.args[2] for call in cmd.call_args_list]
+            self.assertIn('intel_ipu4p_psys', loaded)
+            self.assertNotIn('intel_ipu4p_isys', loaded)
+            self.assertNotIn('v4l2loopback', loaded)
 
 
 class CaptureTests(unittest.TestCase):
