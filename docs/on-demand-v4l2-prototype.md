@@ -1,4 +1,4 @@
-> **10 October 2026:** Startup policy has changed. Older boot-enable, timer and rollback commands below are historical. Use [the explicit-start design and exact plan](explicit-start.md). This revision is not deployed or camera-tested.
+> **10 October 2026:** Startup policy has changed and was deployed. Older boot-enable, timer and rollback commands below are historical. Use [the explicit-start design and exact plan](explicit-start.md). Clean-boot acceptance and camera testing are pending.
 
 # On-demand V4L2 camera implementation
 
