@@ -1,0 +1,139 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-2.0-or-later
+"""Explicit post-login camera activation. No boot, network or login autostart."""
+import fcntl
+import os
+from pathlib import Path
+import signal
+import subprocess
+import sys
+import time
+
+RUN = Path('/run/surface7-camera')
+UNITS = ['surface7-front-camera-on-demand.service',
+         'surface7-front-camera-idle-relay.service', 'surface7-camera-init.service']
+MODULES = ['dw9719', 'ov5693', 'ov8865', 'ipu_bridge',
+           'intel_ipu4p_isys_csslib', 'intel_ipu4p_psys_csslib',
+           'intel_ipu4p', 'intel_ipu4p_psys', 'intel_ipu4p_isys', 'v4l2loopback']
+
+
+def command(*args, timeout=10):
+    # Do not wait indefinitely for a kernel-blocked child after SIGKILL.
+    child = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                             text=True, start_new_session=True)
+    try:
+        out, err = child.communicate(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        os.killpg(child.pid, signal.SIGKILL)
+        raise RuntimeError(f'{args[0]} timed out; do not retry in this boot')
+    if child.returncode:
+        raise RuntimeError(f'{" ".join(args)}: {err.strip() or out.strip()}')
+    return out.strip()
+
+
+def require_login():
+    if not sys.stdin.isatty():
+        raise RuntimeError('Start requires an explicit command in an interactive terminal')
+    state = subprocess.run(['systemctl', 'is-system-running'], capture_output=True,
+                           text=True, timeout=5).stdout.strip()
+    if state not in ('running', 'degraded'):
+        raise RuntimeError('System boot has not completed')
+    uid = os.environ.get('SUDO_UID', str(os.getuid()))
+    sessions = command('loginctl', 'list-sessions', '--no-legend', '--no-pager')
+    for line in sessions.splitlines():
+        session = line.split()[0]
+        props = command('loginctl', 'show-session', session, '-p', 'User', '-p', 'Class',
+                        '-p', 'Active', '-p', 'Type')
+        p = dict(x.split('=', 1) for x in props.splitlines() if '=' in x)
+        if (p.get('User') == uid and p.get('Class') == 'user'
+                and p.get('Active') == 'yes' and p.get('Type') in ('tty', 'x11', 'wayland')):
+            return
+    raise RuntimeError('No active interactive user session for the caller (greeter excluded)')
+
+
+def initialize():
+    if not (RUN / 'requested').is_file() or (RUN / 'failed').exists():
+        raise RuntimeError('No explicit request, or this boot is latched failed')
+    if (RUN / 'initialized').exists():
+        return
+    # Exclusive creation survives unit resets; failed initialization cannot loop.
+    with (RUN / 'attempted').open('x') as out:
+        out.write(f'{time.monotonic():.3f}\n')
+    deadline = time.monotonic() + 40
+    for module in MODULES:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise RuntimeError('Initialization deadline exceeded')
+        # Bypass only this module's install=false; dependencies remain guarded.
+        # The dependency order is explicit; no global unblacklist window.
+        command('/sbin/modprobe', '--ignore-install', module, timeout=min(8, remaining))
+        if module == 'intel_ipu4p_psys':
+            # Preserve the existing camera MMU workaround, not CPU power policy.
+            mmu = Path('/sys/bus/intel-ipu4-bus/devices/intel-ipu4-mmu1/power/control')
+            if not mmu.exists():
+                raise RuntimeError('Expected IPU4 MMU1 is absent; no retry')
+            mmu.write_text('on\n')
+    # No v4l2-ctl, v4l_id, device open, global udev settle or repeated bind here.
+    if not Path('/dev/video83').exists():
+        raise RuntimeError('Virtual camera node is absent')
+    if not any('/intel-ipu4-mmu' in str(p.resolve()) for p in Path('/sys/class/media').glob('media*')):
+        raise RuntimeError('Camera media graph is absent')
+    (RUN / 'initialized').touch()
+
+
+def main():
+    if len(sys.argv) != 2 or sys.argv[1] not in ('start', 'stop', 'status', 'initialize', 'service-result'):
+        print('Usage: sudo surface7-camera {start|stop|status}', file=sys.stderr)
+        return 2
+    action = sys.argv[1]
+    if action == 'status':
+        subprocess.run(['systemctl', 'status', '--no-pager', *UNITS], check=False)
+        print('Failed this boot:', (RUN / 'failed').exists())
+        return 0
+    if os.geteuid() != 0:
+        raise RuntimeError('Use sudo for start/stop')
+    if action == 'service-result':
+        if os.environ.get('SERVICE_RESULT', 'success') != 'success':
+            RUN.mkdir(mode=0o755, exist_ok=True)
+            (RUN / 'failed').touch()
+            (RUN / 'requested').unlink(missing_ok=True)
+        return 0
+    if action == 'start':
+        require_login()
+    RUN.mkdir(mode=0o755, exist_ok=True)
+    # Unit initialization runs under the start lock, so it must not take it again.
+    if action == 'initialize':
+        initialize()
+        return 0
+    with (RUN / 'control.lock').open('a') as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        if action == 'stop':
+            (RUN / 'requested').unlink(missing_ok=True)
+            command('systemctl', 'stop', *UNITS, timeout=25)
+            print('Capture services stopped. Modules remain loaded until reboot; no forced unload.')
+            return 0
+        if (RUN / 'failed').exists():
+            raise RuntimeError('Camera failed in this boot. Keep it stopped; inspect logs before an approved reboot')
+        if (RUN / 'attempted').exists() and not (RUN / 'initialized').exists():
+            raise RuntimeError('Earlier initialization incomplete; refusing another attempt this boot')
+        (RUN / 'requested').touch(mode=0o600)
+        try:
+            command('systemctl', 'start', 'surface7-camera-init.service', timeout=50)
+            command('systemctl', 'start', 'surface7-front-camera-idle-relay.service', timeout=10)
+            command('systemctl', 'start', 'surface7-front-camera-on-demand.service', timeout=10)
+            command('systemctl', 'is-active', '--quiet', *UNITS, timeout=5)
+        except Exception:
+            (RUN / 'failed').touch()
+            (RUN / 'requested').unlink(missing_ok=True)
+            subprocess.run(['systemctl', '--no-block', 'stop', *UNITS], check=False, timeout=5)
+            raise
+        print('Camera armed explicitly. Physical capture starts only when an application requests video.')
+    return 0
+
+
+if __name__ == '__main__':
+    try:
+        sys.exit(main())
+    except (OSError, RuntimeError, subprocess.SubprocessError) as exc:
+        print(f'surface7-camera: {exc}', file=sys.stderr)
+        sys.exit(1)

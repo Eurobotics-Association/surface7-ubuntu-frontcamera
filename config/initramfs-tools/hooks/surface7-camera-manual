@@ -1,0 +1,8 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-or-later
+set -eu
+[ "${1:-}" = prereqs ] && exit 0
+: "${DESTDIR:?initramfs-tools DESTDIR is required}"
+source=/etc/modprobe.d/surface7-camera-manual.conf
+[ -f "$source" ] || { echo 'Surface7 initrd module guard missing' >&2; exit 1; }
+install -D -m 0644 "$source" "$DESTDIR/etc/modprobe.d/surface7-camera-manual.conf"

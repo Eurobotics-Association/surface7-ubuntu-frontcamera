@@ -1,73 +1,15 @@
-# Surface Pro 7 camera work — current handoff
+# Current handoff — 10 October 2026
 
-Updated: 6 October 2026, 23:50 CEST
+The priority is now **no physical or virtual camera activation during boot**. Browser testing is paused. The user requires approval before any deployment, package installation, host service/module change, camera test or reboot; earlier testing authorization does not apply to this task.
 
-## Goal
+The [explicit-start design and deployment/rollback plan](explicit-start.md) is implemented in the repository and awaiting review. The host remains on the previous deployed candidate. Do not confuse repository validation with deployment or camera acceptance.
 
-Finish a reliable Ubuntu front-camera setup for Microsoft Surface Pro 7. Keep the virtual camera discoverable, start the physical camera only while a client requests capture, and stop the source/white LED when the last client closes. Make the result work in Cheese, Firefox, Brave, Opera, and WebcamTests.com.
+The read-only audit confirms that the disabled `sp7-camera-boot.service` is required by the enabled relay and on-demand units. It loads IPU4P before the display manager. A separate modules-load file loads v4l2loopback. The current boot shows early firmware-authentication failures and blocked `v4l_id` probes. Use monotonic timestamps; initial wall-clock dates are unreliable. A camera contribution to Bluetooth delay and low CPU frequency remains a hypothesis.
 
-## Current implementation
+The new design masks three legacy units, removes new-unit boot enablement, blocks camera module loading (also in rebuilt initrds), skips physical IPU4 udev video probing and restricts physical nodes to root. `sudo surface7-camera start` after interactive login is the only supported activation path. Failures latch off without automatic retries. Kernel tasks in uninterruptible sleep may still require an approved reboot.
 
-- Ubuntu 24.04 x86_64; build/deploy targets the currently running Ubuntu kernel and its matching headers. Keep exact host kernel inventory out of public docs.
-- GStreamer with the Surface-built libcamera plugin and libcamerasrc feeds the V4L2 loopback device /dev/video83.
-- The on-demand relay holds one initialization frame; it does not emit black frames continuously.
-- The controller watches the v4l2loopback CLIENT_USAGE Boolean and starts/stops the physical pipeline. The old always-on unit/timer are disabled.
-- No PipeWire camera source is used. Leave PipeWire audio/desktop services alone.
-- Root README has the public curl install command. Install and rollback details are in README.md and on-demand-v4l2-prototype.md.
+Before deployment, the transaction snapshots all six units' enablement and active state, all affected files, all existing initrd images and the loaded-module inventory. Read `explicit-start.md` for exact commands, refusal conditions, safe rollback versus active-state restoration, and recovery limits. Do not alter CPU power controls, module binaries, firmware, the Surface 5 repository or upstream sources.
 
-## Latest evidence and unresolved apps
+Correction to the 6 October wording: Robert explicitly clarified that he had to click “Test my webcam” repeatedly. A later controlled test also succeeded on the second click with visible moving frames at 1280×720, about 29 FPS. The selected label/device identifier stayed stable during that controlled test; this does not disprove his earlier observed transitions. The repeated-click problem is unresolved. Low-light static-scene checks are not moving-frame acceptance.
 
-- Direct V4L2 testing previously read 30 frames. A temporary sample was upright, with the ceiling at the top.
-- Robert reports WebcamTests.com eventually displayed 1280×720 RGB at 29 FPS. He did not manually retry. The page's device name changed after permission approval, it requested approval again, automatically stopped/restarted the stream, then selected “Surface Pro 7 Front Camera” and produced stable frames. Closing the tab stopped capture and the white LED went out. The cause is unknown.
-- Cheese did not discover the synthetic camera in the latest attempt. An isolated provider showed a preview in an earlier test, but not reliably. Cheese remains unresolved.
-- Firefox has not been retested against the current on-demand deployment; earlier attempts failed. Teams and Google Meet are untested.
-- Robert previously reported Brave and Opera working with an earlier service version. Retest both against the current deployment.
-- Image orientation has differed across application tests. Do not add a global rotation; capture and record one result for each client.
-- The current design is experimental. A browser success and a direct V4L2 read do not prove the app matrix or first-try startup reliability.
-
-## Main investigation findings
-
-- Always-on GStreamer delivered images but kept the physical camera and white LED active while idle. Stopping that service extinguished the LED without a reboot.
-- On-demand startup first failed due to an unsupported libcamerasrc property; after its removal it loaded Ubuntu's stock plugin rather than the Surface-built plugin. PR #15 fixed plugin selection and runtime registry handling.
-- After deployment of that fix, a V4L2 read delivered 30 frames. PR #16 documented the frame test and application-test limits.
-- Ordinary GStreamer device discovery hides the loopback node. A process-scoped provider prototype exposed only /dev/video83, but emitted GStreamer critical warnings. Keep it temporary until Cheese can reliably discover the device and display moving frames.
-- WebcamTests first appeared paused in the in-app browser; the later user test succeeded after retries. The latter is the current browser evidence.
-
-## Continue with these tests
-
-1. Test Cheese by itself. Compare normal GStreamer device discovery with the isolated provider. Confirm Cheese selects /dev/video83, displays moving frames, and shows the correct orientation. Capture provider and Cheese logs, including the GStreamer criticals.
-2. Test one browser at a time. Capture device IDs/labels, permission state, devicechange events, browser console/WebRTC logs, and service transitions before and after approval; wait for stable frames, close the tab, then verify the physical pipeline and LED stop. Robert did not manually retry in the reported session, so investigate the page/device transition itself.
-3. Repeat for Brave, Opera, and Firefox on the current deployment. Record the actual Firefox error rather than relying on the site's generic “busy or blocked” message. Test Teams and Google Meet separately; their compatibility is unknown.
-4. Do not install the provider globally, change the source rotation, reload camera modules, or reboot until the change is rollback-covered and the needed hardware test is explicitly authorized.
-
-## Install and rollback
-
-Public installer:
-
-~~~sh
-curl -fsSL https://raw.githubusercontent.com/Eurobotics-Association/surface7-ubuntu-frontcamera/main/scripts/install-from-github.sh | bash -s -- --install
-~~~
-
-Update the on-demand services from a checkout with:
-
-~~~sh
-./scripts/install.sh --deploy-services
-~~~
-
-Restore the previous service deployment with:
-
-~~~sh
-/usr/local/lib/surface7-ubuntu-frontcamera/scripts/rollback.sh --previous-deployment
-~~~
-
-Full rollback:
-
-~~~sh
-/usr/local/lib/surface7-ubuntu-frontcamera/scripts/rollback.sh
-~~~
-
-Rollback does not reboot. The previous-deployment rollback can restore the old always-on service, which may turn the LED on. Before any reboot, broadcast a warning to every logged-in user and wait at least two minutes.
-
-## Repository instructions
-
-Follow AGENTS.md. Use the GitHub plugin for all repository reads/writes, target only Eurobotics-Association/surface7-ubuntu-frontcamera, use Ubuntu APT, preserve the upstream source unchanged, and never modify Surface 5.
+Next sequence: review repository diff and tests → request deployment approval → verify the deployed inactive policy → separately request controlled reboot approval, broadcast a system-wide warning and wait 120 seconds → compare boot, Bluetooth, camera errors and CPU metrics without starting the camera → request a later explicit camera test. No implied approval between these steps.

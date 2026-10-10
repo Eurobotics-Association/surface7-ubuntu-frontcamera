@@ -1,64 +1,39 @@
-Updated: 6 October 2026, 23:50 CEST
-
 # Surface Pro 7 front camera on Ubuntu
 
-## Quick install
+Experimental GStreamer/libcamera → V4L2 compatibility camera for Microsoft Surface Pro 7 (not 7+), Ubuntu 24.04 x86_64 and the installed Ubuntu HWE kernel.
 
-For Ubuntu 24.04 x86_64 on a Microsoft Surface Pro 7, run:
+**10 October 2026: the proposed design requires explicit startup after login. It must not initialize physical or virtual cameras during boot.** The repository implementation is prepared; deployment and reboot acceptance are pending. The currently installed earlier design can still pull its disabled boot service in through dependent units.
 
-~~~sh
-curl -fsSL https://raw.githubusercontent.com/Eurobotics-Association/surface7-ubuntu-frontcamera/main/scripts/install-from-github.sh | bash -s -- --install
-~~~
+Read the [startup design, exact deployment/rollback plan and verification protocol](docs/explicit-start.md) before changing the host. There is no network-triggered, timer-triggered or automatic login startup.
 
-The GitHub installer checks the device, Ubuntu release, running kernel, matching headers, and required packages. It installs missing Ubuntu packages through APT and asks for sudo when needed. A fresh install builds/registers the camera modules with DKMS and deploys the on-demand GStreamer services. On an existing project-owned installation, it updates the services without rebuilding DKMS. It never reboots automatically.
+From the reviewed checkout:
 
-## Current status
+```sh
+./scripts/deploy-services.sh --plan
+# Only after explicit approval for host deployment:
+./scripts/deploy-services.sh
+```
 
-The experimental on-demand design is deployed. It keeps /dev/video83 discoverable using a low-activity relay with one initialization frame; it does not send black frames continuously. The physical camera pipeline starts when a client requests capture and stops after the client releases it.
+The service migration does not install packages, replace DKMS modules or firmware, load/unload camera modules, test the camera or reboot. It preserves rollback snapshots before host changes and rebuilds existing initrds with the module guard. Already loaded modules remain until a separately approved reboot. Fresh hardware installation is temporarily paused pending acceptance of the broader DKMS transaction.
 
-Robert reports that WebcamTests.com eventually showed live video: RGB 1280×720 at 29 FPS. The page's camera entry changed after permission approval, it asked for approval again, and the stream stopped and restarted automatically. The label then changed to “Surface Pro 7 Front Camera” and stable frames appeared. Robert did not manually retry; the page's device/permission/startup sequence cycled on its own. Closing the successful tab stopped the source and white LED. The cause of the identity/prompt transitions is unresolved, and Teams/Google Meet have not been tested.
+After deployment and a clean, separately approved reboot, an interactive logged-in user can explicitly arm the camera:
 
-The latest Cheese attempt did not discover the synthetic camera. Cheese is not accepted yet. Firefox has not been retested against the current on-demand deployment; previous attempts failed. Brave and Opera worked in earlier user tests, but must be retested on this deployment before they are called current passes. Image orientation has differed between clients, so no global rotation is applied. See the [handoff and acceptance record](docs/handoff-current.md), [detailed on-demand investigation](docs/on-demand-v4l2-prototype.md), and [test log](docs/testing.md).
+```sh
+sudo surface7-camera start
+sudo surface7-camera status
+sudo surface7-camera stop
+```
 
-## Install, update, and inspect
+Once armed, the relay keeps `/dev/video83` discoverable with one initialization frame. Physical capture starts only when an application requests video. A startup or capture failure latches the camera off for that boot; no automatic retry loop is used. Firmware authentication remains unresolved, so this design is experimental.
 
-The command above supports both fresh installation and updating an existing project-owned install. From a checked-out repository, update only the on-demand services with:
+Rollback from the reviewed checkout:
 
-~~~sh
-./scripts/install.sh --deploy-services
-~~~
+```sh
+./scripts/rollback.sh --startup-policy
+```
 
-Read-only checks:
+This restores files, initrds and saved unit enablement, keeping services stopped. `--startup-policy-resume` also restores previously active services and requires approval because it may start the old camera design. Keep the reviewed checkout: restoring the installed rollback helper can replace it with the older version.
 
-~~~sh
-./scripts/check-system.sh
-./scripts/status.sh
-systemctl status surface7-front-camera-idle-relay.service surface7-front-camera-on-demand.service
-~~~
+Earlier WebcamTests sessions produced 1280×720 RGB at about 29 FPS, including observed moving frames, but required repeated manual test clicks. Reliable first-click startup, Cheese, Firefox, Teams and Meet remain unaccepted. See the [handoff](docs/handoff-current.md), [test record](docs/testing.md) and [earlier investigation](docs/on-demand-v4l2-prototype.md).
 
-The installer checks required packages and kernel headers. It installs missing Ubuntu packages with APT and sudo when necessary. The old always-on unit and timer are disabled and removed during migration; the on-demand services are enabled at boot. The physical camera pipeline remains stopped while no client is capturing.
-
-## Rollback
-
-Restore the previous camera-service setup while keeping DKMS modules, firmware, and packages installed:
-
-~~~sh
-/usr/local/lib/surface7-ubuntu-frontcamera/scripts/rollback.sh --previous-deployment
-~~~
-
-Remove the project deployment and restore saved system files:
-
-~~~sh
-/usr/local/lib/surface7-ubuntu-frontcamera/scripts/rollback.sh
-~~~
-
-The previous-deployment rollback restores the prior service state; if that state used continuous capture, the camera LED may turn on again. Full rollback can restore older kernel-module files and may require a later manual reboot. Neither rollback mode reboots automatically. Backups are under /var/lib/surface7-ubuntu-frontcamera/backup.
-
-## Scope
-
-- Target: Microsoft Surface Pro 7 (not 7+) with Ubuntu 24.04 x86_64 and the currently running Ubuntu kernel.
-- Camera capture uses GStreamer with the Surface-built libcamera plugin and libcamerasrc.
-- No PipeWire camera source, SPA plugin, or WirePlumber camera rule is installed or configured.
-- Packages come from Ubuntu APT repositories.
-- upstream/surface-pro-7-camera/ is a pinned vendor source snapshot and remains unmodified.
-- The front IR camera is outside this repository's scope. Surface 5 files and checkouts are not used or modified.
+No PipeWire camera configuration is used. Existing PipeWire audio/desktop services, Surface 5, and `upstream/surface-pro-7-camera` remain unchanged. All package operations use Ubuntu APT and require separate approval in the current task.

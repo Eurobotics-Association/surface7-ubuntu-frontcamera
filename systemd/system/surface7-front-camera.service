@@ -1,14 +1,9 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
 [Unit]
-Description=Surface Pro 7 front camera GStreamer bridge
-Requires=sp7-camera-boot.service
-After=sp7-camera-boot.service
-ConditionPathExists=/dev/video83
-StartLimitIntervalSec=60
-StartLimitBurst=3
-
+Description=Retired Surface7 automatic camera entry point
+RefuseManualStart=yes
+ConditionPathExists=/run/surface7-camera/retired-never-created
 [Service]
-Type=simple
-Environment=GST_PLUGIN_PATH=/usr/local/lib/surface7-ubuntu-frontcamera/gstreamer-1.0
-EnvironmentFile=/etc/default/surface7-front-camera
-ExecStart=/usr/local/libexec/surface7-front-camera
+Type=oneshot
+ExecStart=/bin/false
 Restart=no

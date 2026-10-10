@@ -1,3 +1,5 @@
+> **10 October 2026:** Startup policy has changed. Older boot-enable, timer and rollback commands below are historical. Use [the explicit-start design and exact plan](explicit-start.md). This revision is not deployed or camera-tested.
+
 # Rollback
 
 Installations made from this revision copy a self-contained rollback helper and its two configuration files into the product-owned directory before deployment starts. Run it as the desktop user; it will ask sudo when needed:

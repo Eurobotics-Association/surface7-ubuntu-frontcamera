@@ -75,7 +75,18 @@ def main() -> int:
         + "# for the signed 20191030 firmware and 20181222 CSS library pairing." + NL,
         "replace stale global firmware-version override with the pinned source's SP7-specific check",
     )
+    # Guard aliases AND explicit legacy modprobe calls in the temporary copy.
+    manual_guard = (pathlib.Path(__file__).resolve().parent.parent /
+                    "config/modprobe.d/surface7-camera-manual.conf").read_text()
+    modprobe_text += NL + manual_guard
     modprobe_config.write_text(modprobe_text, encoding="utf-8")
+    (path.parent / "config/modules-load.d/sp7-v4l2loopback.conf").write_text(
+        "# Surface7 managed: explicit start only; no modules at boot\n")
+    # The vendored unit is installed again later; replace that temporary copy too.
+    (path.parent / "systemd/system/sp7-camera-boot.service").write_text(
+        (pathlib.Path(__file__).resolve().parent.parent /
+         "systemd/system/sp7-camera-boot.service").read_text())
+
 
     source = replace_once(source, 'EXPECTED_KERNEL="6.19.8-3.surface.fc43.x86_64"',
                           f'EXPECTED_KERNEL="{KERNEL}"', "target kernel")
@@ -448,7 +459,7 @@ install_system_file \
 
 sudo systemctl daemon-reload
 sudo systemctl disable surface7-front-camera.service sp7-camera-boot.service 2>/dev/null || true
-sudo systemctl enable surface7-front-camera.timer
+sudo systemctl disable surface7-front-camera.timer 2>/dev/null || true
 [[ -f "$GSTREAMER_PLUGIN" ]] || die "Installed libcamera GStreamer plugin is missing."
 GST_PLUGIN_PATH="$(dirname "$GSTREAMER_PLUGIN")" \
     gst-inspect-1.0 libcamerasrc >/dev/null \
@@ -511,7 +522,7 @@ gst-inspect-1.0 v4l2sink >/dev/null \
         + "  - Only one physical rear-camera stream can own the sensor at a time.",
         "  - GStreamer libcamerasrc feeds the front RGB camera to /dev/video83." + NL
         + "  - V4L2 applications should expose the Surface Pro 7 front camera." + NL
-        + "  - The enabled bridge keeps the front camera active until the service is stopped.",
+        + "  - Camera startup requires an explicit post-login request.",
     )
     source = source.replace(
         "Known v0.1 limitations:" + NL

@@ -48,7 +48,7 @@ else
 fi
 
 printf '\nCamera systemd services:\n'
-for unit in sp7-camera-boot.service surface7-front-camera.service \
+for unit in surface7-camera-init.service sp7-camera-boot.service surface7-front-camera.service \
     surface7-front-camera.timer surface7-front-camera-idle-relay.service \
     surface7-front-camera-on-demand.service; do
     unit_status "$unit"
@@ -57,7 +57,7 @@ done
 if [[ -e /dev/video83 ]]; then
     printf '\nFront-camera V4L2 node: /dev/video83 present\n'
 else
-    printf '\nFront-camera V4L2 node: /dev/video83 missing\n'
+    printf '\nFront-camera V4L2 node: /dev/video83 absent (expected before explicit start)\n'
 fi
 printf 'GStreamer physical camera processes:\n'
 pgrep -ax gst-launch-1.0 || printf '  none\n'
@@ -71,3 +71,8 @@ else
 fi
 
 printf '\nUse journalctl -b -u surface7-front-camera-on-demand.service for controller diagnostics.\n'
+
+printf "Explicit-start gate: "
+[[ -f /run/surface7-camera/requested ]] && echo armed || echo closed
+printf "Failure latch: "
+[[ -f /run/surface7-camera/failed ]] && echo set || echo clear

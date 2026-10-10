@@ -4,11 +4,24 @@ set -euo pipefail
 ROOT="$(cd -- "$(dirname -- "$0")/.." && pwd)"
 source "$ROOT/config/ubuntu.env"
 
+# Startup-policy rollback must precede legacy full/previous modes. This path
+# restores every changed file and all six unit states, including relay/controller.
+case "${1:-}" in
+    --startup-policy) [[ $EUID -ne 0 ]] || { echo 'Run as desktop user; sudo will prompt.' >&2; exit 1; }; exec sudo python3 "$ROOT/scripts/startup-policy.py" rollback ;;
+    --startup-policy-resume) [[ $EUID -ne 0 ]] || { echo 'Run as desktop user; sudo will prompt.' >&2; exit 1; }; exec sudo python3 "$ROOT/scripts/startup-policy.py" rollback-resume ;;
+esac
+if sudo test -f "$SURFACE7_BACKUP_ROOT/explicit-start-v1/.complete" &&
+   ! sudo test -f "$SURFACE7_BACKUP_ROOT/explicit-start-v1/.restored"; then
+    echo 'Restore --startup-policy first; legacy rollback does not understand this boot policy.' >&2
+    exit 1
+fi
+
+
 MODE="${1:-full}"
 case "$MODE" in
     full|--full) MODE=full ;;
     --previous-deployment) MODE=previous ;;
-    *) echo "Usage: $0 [--previous-deployment|--full]" >&2; exit 2 ;;
+    *) echo "Usage: $0 [--startup-policy|--startup-policy-resume|--previous-deployment|--full]" >&2; exit 2 ;;
 esac
 
 [[ $EUID -ne 0 ]] || { echo "Run as your desktop user; rollback will ask sudo." >&2; exit 1; }

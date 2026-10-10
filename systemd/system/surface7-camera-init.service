@@ -1,0 +1,15 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+[Unit]
+Description=Explicit Surface7 camera initialization after login
+ConditionPathExists=/run/surface7-camera/requested
+ConditionPathExists=!/run/surface7-camera/failed
+After=graphical.target
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/surface7-camera initialize
+ExecStopPost=/usr/local/sbin/surface7-camera service-result
+RemainAfterExit=yes
+TimeoutStartSec=45
+TimeoutStopSec=5
+Restart=no
+KillMode=control-group

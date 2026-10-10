@@ -1,0 +1,47 @@
+{
+  "/usr/local/sbin/sp7-camera-boot": [
+    "8b6b8f2a442cb07c1c4ad3735cb682a53bf33e6b04d442d0dadc61b2fc9513c2"
+  ],
+  "/usr/local/libexec/surface7-front-camera-controller.py": [
+    "b57e0413bb39f81dd33425beba9b43d00562b0ad1f9591ed5a3934221fa5e313",
+    "750d39db4cd889c3a68558521470d840f1394f415ebb1f47b6c748d081d77778"
+  ],
+  "/usr/local/libexec/surface7-v4l2-idle-relay": [
+    "75d6dc0cee8c6edc2f7a6aecb0841716c49d731677c4bbaee1ffd31ece2fa22b"
+  ],
+  "/usr/local/libexec/surface7-v4l2-client-watch": [
+    "1fbafacff8888954a5e2346fc36fdf7be33bc02873a0f8a1af027fc61fe4aace"
+  ],
+  "/etc/default/surface7-front-camera": [
+    "b0d6a713cfca1f13c52552a6fe1aa665570f96890ecccfa6dd949f9d735f845b"
+  ],
+  "/etc/modules-load.d/sp7-v4l2loopback.conf": [
+    "64b4ad23ac569869fc11c591f89424a245588d7e48d89d911afb3a67927a8e17"
+  ],
+  "/etc/systemd/system/sp7-camera-boot.service": [
+    "5e8040fc31e52ae7f507bbfea106687f2c328df2d5d680dc8d9f8fb1d8532276",
+    "94163276b384749ff92eabc9bf77712d2830d7659b3ad7f85a14e8afdf8c0b63"
+  ],
+  "/etc/systemd/system/surface7-front-camera-idle-relay.service": [
+    "cd1265d866a144b75d1de40f1e37c674f54b53414cd2a37ca31b4ba68296898c"
+  ],
+  "/etc/systemd/system/surface7-front-camera-on-demand.service": [
+    "be13661f6279ee4175976220c7f35a5ce67fef39a18388a99a355a2c2219a19a"
+  ],
+  "/usr/local/lib/surface7-ubuntu-frontcamera/scripts/rollback.sh": [
+    "86b8db66100516ac82c5773d382827bfe1ab5757b51b46ded0585e13b9aaab31",
+    "b4f68ac9616157fb3195fc7598cf38a5d1234ac9ef3da644521b9d5a9012aa9c"
+  ],
+  "/usr/local/lib/surface7-ubuntu-frontcamera/config/ubuntu.env": [
+    "a0164a9b78525e3b86904a4f1b2da6521389aadb264909bca3baab546d7bf273"
+  ],
+  "/usr/local/lib/surface7-ubuntu-frontcamera/config/ownership-marker": [
+    "d12c3ece28c5b29608275152f6f014738278c0abaa1541e8446eeeb18e02656c"
+  ],
+  "/etc/systemd/system/surface7-front-camera.service": [
+    "110177af45f4228ea7a03d40a54fc144573988f07f833ebb9c54f7181d48fb67"
+  ],
+  "/etc/systemd/system/surface7-front-camera.timer": [
+    "f44bb73d76563e94ee767bae1b122e9a5dfb7008e630edbc3c5f8e329606ecf0"
+  ]
+}
