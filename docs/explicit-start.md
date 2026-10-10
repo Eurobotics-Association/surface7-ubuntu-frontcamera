@@ -1,6 +1,6 @@
 # Explicit camera startup — experimental, 10 October 2026
 
-This change is prepared for review, not deployed or camera-tested. It supersedes every older instruction to enable the camera at boot, after a boot timer, or automatically at login. The target remains Surface Pro 7 (not 7+), Ubuntu 24.04 x86_64, with the installed Ubuntu HWE kernel and matching headers. Surface 5 and the pinned upstream tree are unchanged.
+This change was merged and deployed on 10 October 2026; clean-boot acceptance and moving-frame camera testing are pending. It supersedes every older instruction to enable the camera at boot, after a boot timer, or automatically at login. The target remains Surface Pro 7 (not 7+), Ubuntu 24.04 x86_64, with the installed Ubuntu HWE kernel and matching headers. Surface 5 and the pinned upstream tree are unchanged.
 
 ## Behavior
 
@@ -30,7 +30,9 @@ The controller filters brief demand probes for 1.2 seconds. A source exit, missi
 
 These are userspace limits. A module insertion or source process stuck in uninterruptible kernel sleep may outlive SIGKILL and systemd's deadline. No userspace timeout can promise to recover that driver. The design prevents boot activation and removes the known mass-probe and automatic retry paths; it does not claim to repair firmware authentication or all internal driver retries. Do not repeatedly unload/reload or clear the latch to work around a failure.
 
-## Exact deployment plan — approval required
+## Exact deployment procedure and result
+
+The user approved deployment. PR #19 was merged into main at `0bfa0cae938165bfd29ac05a2453c54009cb1df7`. Deployment then finished successfully on the target host. The immutable snapshot is complete and marked deployed; it records 23 paths, all six unit states and the prior loaded-module inventory. Both installed initrd hashes match the generated images, and both backed-up original hashes match the manifest. The initrd generation step verified inclusion of the module guard. The three legacy units are masked and inactive; the three new units are static and inactive. The modules-load file is comment-only. The installed transaction engine and rollback script match this repository's reviewed bytes. No packages were installed, no camera modules were loaded/unloaded, and no camera test or reboot was run during deployment. Camera modules loaded by the earlier design remain in this boot. **Do not interpret these checks as clean-boot or moving-frame acceptance.**
 
 Run from the reviewed checkout, as the desktop user. Do not use the older dirty checkout's installer by mistake.
 
@@ -106,7 +108,7 @@ Record these independently:
 | CPU | Same ten-second workload and sampling, mains/profile/temperature recorded. Compare frequency distribution; do not change governor, power profile or firmware controls to improve the result. |
 | Explicit start, later approval | One start attempt; track monotonic duration, enumeration separately from actual frames, moving-frame test while someone is available, normal close/reopen, idle physical-process release and visual LED behavior. On failure, verify the latch and stop testing. |
 
-Private before-baseline taken on 10 October (current earlier design): graphical target at about **56.2 seconds** monotonic; within the first 800 seconds, **336** firmware-authentication failure lines, **134** CSE boot-load failure lines, **134** `v4l_id` lines and **7** blocked-task reports. The first logged Bluetooth keyboard/mouse input devices registered around **217 seconds**. Under the ten-second single-worker load, reported CPU frequency across samples ranged about **414–577 MHz** (median about **500 MHz**), with maximum observed thermal zone **46°C** and Balanced profile. Input registration is a proxy for usability; no human keystroke or pointer movement was observed by this script. The private JSON stays outside the PR. After-baseline is pending the approved deployment and reboot.
+Private before-baseline taken on 10 October (current earlier design): graphical target at about **56.2 seconds** monotonic; within the first 800 seconds, **336** firmware-authentication failure lines, **134** CSE boot-load failure lines, **134** `v4l_id` lines and **7** blocked-task reports. The first logged Bluetooth keyboard/mouse input devices registered around **217 seconds**. Under the ten-second single-worker load, reported CPU frequency across samples ranged about **414–577 MHz** (median about **500 MHz**), with maximum observed thermal zone **46°C** and Balanced profile. Input registration is a proxy for usability; no human keystroke or pointer movement was observed by this script. The private JSON stays outside the PR. The after-baseline is pending a separately approved reboot.
 
 The camera contribution to Bluetooth delay and low CPU frequency is a strong hypothesis, **not proven causation**. A cleaner subsequent boot supports it but is not sufficient by itself; record other differences and repeat only with further reboot approval.
 
@@ -116,4 +118,4 @@ Base repository commit: `2ea57dcb431cdce7f2c2a7b39f323fc381fa1847`. The controll
 
 Ubuntu tools used: `systemd`, `udev`, `kmod`, `initramfs-tools`, `python3`, `build-essential`, and the existing GStreamer packages (including `gstreamer1.0-plugins-good` for `progressreport`). See [Ubuntu modprobe.d semantics](https://manpages.ubuntu.com/manpages/noble/man5/modprobe.d.5.html) and [systemd udev rules](https://www.freedesktop.org/software/systemd/man/latest/udev.html). A blacklist alone does not cover an explicit module request; the install guard is intentional. The udev jump is inside the overridden distro file so its label resolves in that file.
 
-Validation for this revision: shell/Python checks, temporary-copy upstream adaptation, offline systemd dependency parsing, isolated rollback/activation/controller regression tests, userspace helper/provider compilation, and synthetic GStreamer buffers to fakesink. **No kernel/DKMS build, new camera enumeration, moving-frame capture, deployment or reboot acceptance has been performed for this design.** Older moving-frame successes remain historical evidence only.
+Validation for this revision: shell/Python checks, temporary-copy upstream adaptation, offline systemd dependency parsing, isolated rollback/activation/controller regression tests, userspace helper/provider compilation, synthetic GStreamer buffers to fakesink, successful deployment and installed-state/snapshot verification. **No kernel/DKMS build, new camera enumeration, moving-frame capture or reboot acceptance has been performed for this design.** Older moving-frame successes remain historical evidence only.
