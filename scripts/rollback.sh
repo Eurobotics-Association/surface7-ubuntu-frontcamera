@@ -7,8 +7,14 @@ source "$ROOT/config/ubuntu.env"
 # Startup-policy rollback must precede legacy full/previous modes. This path
 # restores every changed file and all six unit states, including relay/controller.
 case "${1:-}" in
-    --startup-policy) [[ $EUID -ne 0 ]] || { echo 'Run as desktop user; sudo will prompt.' >&2; exit 1; }; exec sudo python3 "$ROOT/scripts/startup-policy.py" rollback ;;
-    --startup-policy-resume) [[ $EUID -ne 0 ]] || { echo 'Run as desktop user; sudo will prompt.' >&2; exit 1; }; exec sudo python3 "$ROOT/scripts/startup-policy.py" rollback-resume ;;
+    --startup-policy)
+        [[ $EUID -ne 0 ]] || { echo 'Run as desktop user; sudo will prompt.' >&2; exit 1; }
+        sudo python3 "$ROOT/scripts/deploy-psys-gate.py" rollback-if-installed
+        exec sudo python3 "$ROOT/scripts/startup-policy.py" rollback ;;
+    --startup-policy-resume)
+        [[ $EUID -ne 0 ]] || { echo 'Run as desktop user; sudo will prompt.' >&2; exit 1; }
+        sudo python3 "$ROOT/scripts/deploy-psys-gate.py" rollback-if-installed
+        exec sudo python3 "$ROOT/scripts/startup-policy.py" rollback-resume ;;
 esac
 if sudo test -f "$SURFACE7_BACKUP_ROOT/explicit-start-v1/.complete" &&
    ! sudo test -f "$SURFACE7_BACKUP_ROOT/explicit-start-v1/.restored"; then

@@ -15,6 +15,19 @@ UNITS = ['surface7-front-camera-on-demand.service',
 MODULES = ['dw9719', 'ov5693', 'ov8865', 'ipu_bridge',
            'intel_ipu4p_isys_csslib', 'intel_ipu4p_psys_csslib',
            'intel_ipu4p', 'intel_ipu4p_psys', 'intel_ipu4p_isys', 'v4l2loopback']
+PSYS_DRIVER = Path('/sys/bus/intel-ipu4-bus/devices/intel-ipu4-psys0/driver')
+MMU1_CONTROL = Path('/sys/bus/intel-ipu4-bus/devices/intel-ipu4-mmu1/power/control')
+
+
+def wait_for_psys(deadline):
+    # modprobe may return before asynchronous firmware authentication completes.
+    # Loading ISYS before PSYS is bound creates video nodes and can start a
+    # kernel retry storm even after the userspace service has failed.
+    while time.monotonic() < deadline:
+        if PSYS_DRIVER.exists():
+            return
+        time.sleep(0.1)
+    raise RuntimeError('PSYS firmware did not authenticate; ISYS left unloaded')
 
 
 def command(*args, timeout=10):
@@ -69,10 +82,10 @@ def initialize():
         command('/sbin/modprobe', '--ignore-install', module, timeout=min(8, remaining))
         if module == 'intel_ipu4p_psys':
             # Preserve the existing camera MMU workaround, not CPU power policy.
-            mmu = Path('/sys/bus/intel-ipu4-bus/devices/intel-ipu4-mmu1/power/control')
-            if not mmu.exists():
+            if not MMU1_CONTROL.exists():
                 raise RuntimeError('Expected IPU4 MMU1 is absent; no retry')
-            mmu.write_text('on\n')
+            MMU1_CONTROL.write_text('on\n')
+            wait_for_psys(min(deadline, time.monotonic() + 8))
     # No v4l2-ctl, v4l_id, device open, global udev settle or repeated bind here.
     if not Path('/dev/video83').exists():
         raise RuntimeError('Virtual camera node is absent')
