@@ -107,6 +107,9 @@ def gst_command(args: argparse.Namespace) -> list[str]:
         "!",
         "progressreport",
         "name=surface7_progress",
+        # libcamerasrc does not provide a usable stream-position query here;
+        # report from the timestamps of buffers that actually pass this point.
+        "do-query=false",
         "update-freq=1",
         "silent=true",
         "!",
