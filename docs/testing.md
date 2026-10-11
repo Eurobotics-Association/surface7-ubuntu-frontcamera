@@ -1,18 +1,18 @@
-> **11 October 2026:** Two camera-free boots were verified. Explicit camera starts still fail firmware authentication; the deployed PSYS gate bounded the latest failure before ISYS loading. Moving-frame capture remains unverified. Use [the explicit-start test record and plan](explicit-start.md). Older instructions below are historical.
+> **11 October 2026:** Camera-free boots and prompt Bluetooth input were verified. On a one-time `iommu=pt` diagnostic boot, one explicit start produced moving browser video at 1280×720 and a reported 13 FPS. The controller then falsely timed out after about 20 seconds while frames were visible; its failure shutdown turned off the LED. Normal idle release and reconnect are **not yet verified**. A buffer-progress correction has passed hardware-free checks but needs a separately approved recovery boot and live test. See [the explicit-start test record and plan](explicit-start.md). The earlier results below are historical.
 
 # Camera testing and acceptance
 
-Updated: 6 October 2026, 23:50 CEST
+Updated: 11 October 2026
 
-## Current deployment and result
+## Earlier on-demand deployment and result
 
-The experimental on-demand services are installed on Robert's Surface Pro 7. The old always-on camera service and timer are stopped/disabled. The idle relay keeps /dev/video83 discoverable with one retained initialization frame; the physical GStreamer/libcamera pipeline starts on a V4L2 capture request and stops after capture becomes idle. The relay does not emit repeating black frames.
+In this earlier deployment, the experimental on-demand services were installed on Robert's Surface Pro 7. The old always-on camera service and timer were stopped/disabled. The idle relay kept /dev/video83 discoverable with one retained initialization frame; the physical GStreamer/libcamera pipeline started on a V4L2 capture request and stopped after capture became idle. The relay did not emit repeating black frames.
 
 Robert confirmed the white camera LED went out after the old continuous service was stopped. In the latest on-demand WebcamTests.com session, he reports live RGB 1280×720 video at 29 FPS. He did not manually retry. The page initially listed one camera name; after permission approval it showed another name, requested approval again despite the approval just granted, stopped the stream, and restarted it automatically. The page then changed the selected label to “Surface Pro 7 Front Camera” and stable video appeared. The service journal showed multiple capture sessions, consistent with the observed automatic transitions. Closing the successful tab stopped the feed and LED. This confirms one eventual browser success and idle release; the cause of the device/permission churn and its startup smoothness remain unresolved.
 
 The latest Cheese attempt did not discover the synthetic camera. An earlier isolated-provider Cheese run showed a preview, but that result does not establish reliable discovery in the current deployment. Firefox has not been retested on the current on-demand services; earlier tests failed. Robert previously reported Brave and Opera working with the earlier camera service. Those reports do not yet establish current on-demand compatibility.
 
-## Current application matrix
+## Earlier application matrix
 
 | Client/path | Current result | Evidence and limits |
 | --- | --- | --- |

@@ -1,4 +1,4 @@
-> **11 October 2026:** Startup policy was deployed and camera-free boots were verified. The PSYS-gate and subsequent media-graph helper hotfixes have separate immutable snapshots; run the reviewed checkout's `./scripts/rollback.sh --startup-policy` to restore both in reverse order before the base policy. See [the explicit-start plan](explicit-start.md). Older commands below are historical.
+> **11 October 2026:** Startup policy was deployed and camera-free boots were verified. PSYS-gate, media-graph and controller-progress hotfixes have separate immutable snapshots; run the reviewed checkout's `./scripts/rollback.sh --startup-policy` to restore them in reverse order before the base policy. See [the explicit-start plan](explicit-start.md). Older commands below are historical.
 
 # Rollback
 
