@@ -1,8 +1,18 @@
-> **11 October 2026:** Camera-free boots and prompt Bluetooth input were verified. On a one-time `iommu=pt` diagnostic boot, one explicit start produced moving browser video at 1280×720 and a reported 13 FPS. The controller then falsely timed out after about 20 seconds while frames were visible; its failure shutdown turned off the LED. Normal idle release and reconnect are **not yet verified**. A buffer-progress correction has passed hardware-free checks but needs a separately approved recovery boot and live test. See [the explicit-start test record and plan](explicit-start.md). The earlier results below are historical.
+> **12 October 2026:** The buffer-progress fix passed a live browser test on a one-time `iommu=pt` boot: WebcamTests reported 1280×720 RGB at 29 FPS. The controller saw buffers after 1.7 seconds, and the GStreamer source exited cleanly about two seconds after capture went idle. Robert confirmed the camera LED went off. A normal boot without `iommu=pt` still failed PSYS authentication once, before ISYS or v4l2loopback loaded. Camera support remains experimental; repeatable reconnect and normal-boot firmware authentication remain open. See [the explicit-start test record and plan](explicit-start.md).
 
 # Camera testing and acceptance
 
-Updated: 11 October 2026
+Updated: 12 October 2026
+
+## Current validation — 12 October 2026
+
+After rebooting with a one-time `iommu=pt` parameter, checks confirmed the failure latch was clear and the camera modules and services were inactive before an explicit start. The temporary GRUB entry was consumed, removed, and the saved GRUB environment restored; the normal saved kernel entry was unchanged.
+
+The French WebcamTests page was already open before the virtual camera appeared. One click on its force-detect control refreshed the device list; it selected **Surface Pro 7 Front Camera** and completed without further retries. The user saw moving frames. The site reported **1280×720**, **29 FPS**, RGB, 0.92 MP, quality rank 2330, and a successful result. The controller reported `source buffers flowing after 1.676s` and did not trigger its startup timeout.
+
+After the user stopped the page, capture demand ended at 317.018 seconds monotonic; the controller stopped the source at 319.028 seconds and it exited with code 0 at 319.180. No source process remained and the failure latch stayed clear. Robert confirmed the physical LED went off. This verifies one live browser run and one normal idle shutdown; reconnect was not tested.
+
+A separate explicit start on the preceding normal boot, without `iommu=pt`, failed PSYS authentication after about 13 seconds. The helper left ISYS unloaded; v4l2loopback and capture services did not start. The journal showed one matching DMAR read fault and no repeated camera-authentication messages or blocked `v4l_id` workers in the inspected log. This is bounded failure evidence, not proof that `iommu=pt` is the root cause.
 
 ## Earlier on-demand deployment and result
 
