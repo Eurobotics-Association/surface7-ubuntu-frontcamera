@@ -26,6 +26,7 @@ def load(name, path):
 
 policy = load('policy', 'scripts/startup-policy.py')
 hotfix = load('hotfix', 'scripts/deploy-psys-gate.py')
+media_hotfix = load('media_hotfix', 'scripts/deploy-media-graph-gate.py')
 control = load('manual', 'scripts/surface7-camera')
 controller = load('controller', 'prototypes/on-demand-gstreamer-controller.py')
 
@@ -158,8 +159,73 @@ class PsysGateSnapshotTests(unittest.TestCase):
                 self.assertEqual(target.read_bytes(), b'original reviewed helper')
                 self.assertTrue((root / 'backup/.restored').exists())
 
+    def test_media_gate_restores_psys_gate_and_refuses_later_edits(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            base = root / 'psys-gate'
+            base.mkdir()
+            (base / '.deployed').touch()
+            target = root / 'surface7-camera'
+            source = root / 'replacement'
+            target.write_bytes(b'PSYS gate helper')
+            target.chmod(0o755)
+            source.write_bytes(b'media char-device gate')
+            with patch.object(media_hotfix, 'BACKUP', root / 'backup'), \
+                 patch.object(media_hotfix, 'BASE', base), \
+                 patch.object(media_hotfix, 'TARGET', target), \
+                 patch.object(media_hotfix, 'OLD_SHA256', hashlib.sha256(target.read_bytes()).hexdigest()), \
+                 patch.object(media_hotfix.os, 'chown'):
+                media_hotfix.deploy(source)
+                self.assertEqual(target.read_bytes(), source.read_bytes())
+                target.write_bytes(b'unrelated later edit')
+                with self.assertRaisesRegex(RuntimeError, 'later camera helper edit'):
+                    media_hotfix.rollback(False)
+                target.write_bytes(source.read_bytes())
+                media_hotfix.rollback(False)
+                self.assertEqual(target.read_bytes(), b'PSYS gate helper')
+                self.assertTrue((root / 'backup/.restored').exists())
+
 
 class ActivationTests(unittest.TestCase):
+    def test_media_graph_uses_char_device_sysfs_without_media_class(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            char_devices = root / 'char'
+            char_devices.mkdir()
+            unrelated = root / 'devices/usb/media0'
+            unrelated.mkdir(parents=True)
+            (char_devices / '1:0').symlink_to(unrelated)
+            with patch.object(control, 'MEDIA_CHAR_DEVICES', char_devices):
+                self.assertFalse(control.camera_media_graph_present())
+                physical = root / 'devices/pci/intel-ipu4-mmu0/intel-ipu60/media0'
+                physical.mkdir(parents=True)
+                (char_devices / '510:0').symlink_to(physical)
+                self.assertTrue(control.camera_media_graph_present())
+
+    def test_initialization_accepts_registered_media_char_device(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / 'requested').touch()
+            mmu = root / 'mmu-control'
+            mmu.write_text('auto\n')
+            psys = root / 'psys-driver'
+            psys.mkdir()
+            virtual = root / 'video83'
+            virtual.touch()
+            physical = root / 'devices/pci/intel-ipu4-mmu0/intel-ipu60/media0'
+            physical.mkdir(parents=True)
+            char_devices = root / 'char'
+            char_devices.mkdir()
+            (char_devices / '510:0').symlink_to(physical)
+            with patch.object(control, 'RUN', root), \
+                 patch.object(control, 'MMU1_CONTROL', mmu), \
+                 patch.object(control, 'PSYS_DRIVER', psys), \
+                 patch.object(control, 'VIRTUAL_NODE', virtual), \
+                 patch.object(control, 'MEDIA_CHAR_DEVICES', char_devices), \
+                 patch.object(control, 'command'):
+                control.initialize()
+            self.assertTrue((root / 'initialized').exists())
+
     def test_no_terminal_refused_before_system_calls(self):
         with patch.object(control.sys.stdin, 'isatty', return_value=False), patch.object(control, 'command') as cmd:
             with self.assertRaisesRegex(RuntimeError, 'interactive terminal'):
