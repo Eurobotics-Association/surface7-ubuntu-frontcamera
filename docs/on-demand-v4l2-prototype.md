@@ -1,4 +1,4 @@
-> **10 October 2026:** Startup policy was deployed and one camera-free boot was verified. The first explicit camera start failed firmware authentication; moving-frame capture is pending. Use [the explicit-start record and plan](explicit-start.md). Older instructions below are historical.
+> **11 October 2026:** Two camera-free boots were verified. Explicit camera starts still fail firmware authentication; the deployed PSYS gate bounded the latest failure before ISYS loading. Moving-frame capture remains pending. Use [the explicit-start record and plan](explicit-start.md). Older instructions below are historical.
 
 # On-demand V4L2 camera implementation
 
