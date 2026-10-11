@@ -27,6 +27,7 @@ def load(name, path):
 policy = load('policy', 'scripts/startup-policy.py')
 hotfix = load('hotfix', 'scripts/deploy-psys-gate.py')
 media_hotfix = load('media_hotfix', 'scripts/deploy-media-graph-gate.py')
+controller_hotfix = load('controller_hotfix', 'scripts/deploy-controller-progress.py')
 control = load('manual', 'scripts/surface7-camera')
 controller = load('controller', 'prototypes/on-demand-gstreamer-controller.py')
 
@@ -185,6 +186,32 @@ class PsysGateSnapshotTests(unittest.TestCase):
                 self.assertEqual(target.read_bytes(), b'PSYS gate helper')
                 self.assertTrue((root / 'backup/.restored').exists())
 
+    def test_controller_progress_hotfix_restores_base_and_refuses_later_edits(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            base = root / 'base'
+            base.mkdir()
+            (base / '.deployed').touch()
+            target = root / 'controller'
+            source = root / 'replacement'
+            target.write_bytes(b'base controller')
+            target.chmod(0o755)
+            source.write_bytes(b'buffer timestamp progress')
+            with patch.object(controller_hotfix, 'BACKUP', root / 'backup'), \
+                 patch.object(controller_hotfix, 'BASE', base), \
+                 patch.object(controller_hotfix, 'TARGET', target), \
+                 patch.object(controller_hotfix, 'OLD_SHA256', hashlib.sha256(target.read_bytes()).hexdigest()), \
+                 patch.object(controller_hotfix.os, 'chown'):
+                controller_hotfix.deploy(source)
+                self.assertEqual(target.read_bytes(), source.read_bytes())
+                target.write_bytes(b'unrelated later edit')
+                with self.assertRaisesRegex(RuntimeError, 'later controller edit'):
+                    controller_hotfix.rollback(False)
+                target.write_bytes(source.read_bytes())
+                controller_hotfix.rollback(False)
+                self.assertEqual(target.read_bytes(), b'base controller')
+                self.assertTrue((root / 'backup/.restored').exists())
+
 
 class ActivationTests(unittest.TestCase):
     def test_media_graph_uses_char_device_sysfs_without_media_class(self):
@@ -322,12 +349,21 @@ class CaptureTests(unittest.TestCase):
         self.c.usage(False, 2)
         self.assertEqual(self.c.idle_deadline, 3)
 
+    def test_progress_uses_buffer_timestamps_not_source_position_query(self):
+        args = types.SimpleNamespace(camera_name='test-camera', source_width=1296,
+            source_height=972, source_fps_num=30, source_fps_den=1,
+            output_width=1280, output_height=720, output_fps_num=30,
+            output_fps_den=1, fifo=Path('/tmp/test-fifo'), gst_launch='gst-launch-1.0')
+        command = controller.gst_command(args)
+        self.assertIn('do-query=false', command)
+        self.assertLess(command.index('do-query=false'), command.index('filesink'))
+
     @unittest.skipUnless(__import__('shutil').which('gst-launch-1.0'), 'GStreamer not installed')
     def test_progress_is_visible_before_pipeline_exits(self):
         # Synthetic buffers to fakesink only: no physical or virtual camera access.
         child = subprocess.Popen(['stdbuf', '-oL', 'gst-launch-1.0', '-m', 'videotestsrc',
                                   'is-live=true', '!', 'progressreport', 'name=surface7_progress',
-                                  'update-freq=1', 'silent=true', '!', 'fakesink'],
+                                  'do-query=false', 'update-freq=1', 'silent=true', '!', 'fakesink'],
                                  stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
         try:
             import time
