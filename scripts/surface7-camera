@@ -17,6 +17,22 @@ MODULES = ['dw9719', 'ov5693', 'ov8865', 'ipu_bridge',
            'intel_ipu4p', 'intel_ipu4p_psys', 'intel_ipu4p_isys', 'v4l2loopback']
 PSYS_DRIVER = Path('/sys/bus/intel-ipu4-bus/devices/intel-ipu4-psys0/driver')
 MMU1_CONTROL = Path('/sys/bus/intel-ipu4-bus/devices/intel-ipu4-mmu1/power/control')
+MEDIA_CHAR_DEVICES = Path('/sys/dev/char')
+VIRTUAL_NODE = Path('/dev/video83')
+
+
+def camera_media_graph_present():
+    # Media character devices are linked from /sys/dev/char on this kernel;
+    # unlike video4linux, they have no /sys/class/media directory.
+    if not MEDIA_CHAR_DEVICES.is_dir():
+        return False
+    for entry in MEDIA_CHAR_DEVICES.iterdir():
+        target = entry.resolve()
+        if (target.is_dir() and target.name.startswith('media')
+                and target.name[5:].isdigit()
+                and any(part.startswith('intel-ipu4-mmu') for part in target.parts)):
+            return True
+    return False
 
 
 def wait_for_psys(deadline):
@@ -87,9 +103,14 @@ def initialize():
             MMU1_CONTROL.write_text('on\n')
             wait_for_psys(min(deadline, time.monotonic() + 8))
     # No v4l2-ctl, v4l_id, device open, global udev settle or repeated bind here.
-    if not Path('/dev/video83').exists():
+    ready_deadline = min(deadline, time.monotonic() + 3)
+    while time.monotonic() < ready_deadline:
+        if VIRTUAL_NODE.exists() and camera_media_graph_present():
+            break
+        time.sleep(0.1)
+    if not VIRTUAL_NODE.exists():
         raise RuntimeError('Virtual camera node is absent')
-    if not any('/intel-ipu4-mmu' in str(p.resolve()) for p in Path('/sys/class/media').glob('media*')):
+    if not camera_media_graph_present():
         raise RuntimeError('Camera media graph is absent')
     (RUN / 'initialized').touch()
 

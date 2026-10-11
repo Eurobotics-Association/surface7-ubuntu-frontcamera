@@ -9,10 +9,12 @@ source "$ROOT/config/ubuntu.env"
 case "${1:-}" in
     --startup-policy)
         [[ $EUID -ne 0 ]] || { echo 'Run as desktop user; sudo will prompt.' >&2; exit 1; }
+        sudo python3 "$ROOT/scripts/deploy-media-graph-gate.py" rollback-if-installed
         sudo python3 "$ROOT/scripts/deploy-psys-gate.py" rollback-if-installed
         exec sudo python3 "$ROOT/scripts/startup-policy.py" rollback ;;
     --startup-policy-resume)
         [[ $EUID -ne 0 ]] || { echo 'Run as desktop user; sudo will prompt.' >&2; exit 1; }
+        sudo python3 "$ROOT/scripts/deploy-media-graph-gate.py" rollback-if-installed
         sudo python3 "$ROOT/scripts/deploy-psys-gate.py" rollback-if-installed
         exec sudo python3 "$ROOT/scripts/startup-policy.py" rollback-resume ;;
 esac
