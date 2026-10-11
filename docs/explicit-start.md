@@ -99,7 +99,7 @@ python3 scripts/collect-startup-baseline.py --output /tmp/surface7-after.json --
 
 The optional workload is one Python worker, not a frequency benchmark or an effective-clock measurement. Compare the same workload, mains state, profile, session and temperatures on both boots; `scaling_cur_freq` is a sampled driver report. Keep power controls unchanged. Above 95°C, stop heavy work, wait three minutes, then resume monitoring as AGENTS.md requires.
 
-If reboot is approved, broadcast with `wall` to **all logged-in users**, wait the full **120 seconds**, then reboot. Never combine approval for deployment with an assumed approval for reboot or camera testing.
+If reboot is approved, broadcast with `wall` to **all logged-in users**, wait the full **five minutes** Robert requested, then reboot. Never combine approval for deployment with an assumed approval for reboot or camera testing.
 
 Record these independently:
 
