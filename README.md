@@ -2,7 +2,7 @@
 
 Experimental GStreamer/libcamera → V4L2 compatibility camera for Microsoft Surface Pro 7 (not 7+), Ubuntu 24.04 x86_64 and the installed Ubuntu HWE kernel.
 
-**10–11 October 2026: the new design requires explicit startup after login. It must not initialize physical or virtual cameras during boot.** Controlled reboots confirmed no camera modules, nodes or services at boot and Bluetooth working promptly. On a one-time `iommu=pt` boot, the corrected media-graph check armed the camera and WebcamTests showed moving 1280×720 video at a reported 13 FPS. The controller then latched a false progress timeout while frames were visible, so normal idle shutdown and reconnect remain unverified. A buffer-timestamp progress correction is under review; camera support remains experimental.
+**10–12 October 2026: the design requires explicit startup after login and leaves physical/virtual cameras inactive during boot.** Controlled boots confirmed the camera-free startup policy and prompt Bluetooth operation. A normal boot without `iommu=pt` produced one bounded PSYS authentication failure. On a one-time diagnostic boot, the deployed buffer-progress fix reported live buffers; WebcamTests displayed moving 1280×720 RGB video at 29 FPS, and the source exited cleanly after the page stopped. Robert confirmed the LED went off. Normal firmware authentication without the diagnostic parameter and repeatable reconnect behavior remain unverified, so support remains experimental.
 
 Read the [startup design, exact deployment/rollback plan and verification protocol](docs/explicit-start.md) before changing the host. There is no network-triggered, timer-triggered or automatic login startup.
 
